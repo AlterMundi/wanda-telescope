@@ -1,0 +1,32 @@
+<div class="controls">
+    <h2>Mount Controls</h2>
+    <form method="post">
+        <p>
+            Tracking Speed (seconds between steps): 
+            <input type="range" name="mount_speed" min="0.1" max="10" step="0.1" value="{{ mount_speed }}"
+                oninput="this.nextElementSibling.value = this.value">
+            <output>{{ mount_speed }}</output>
+        </p>
+        <div class="radio-container">
+            <p>Direction:</p>
+            <div class="radio-option">
+                <input type="radio" id="clockwise" name="mount_direction" value="clockwise" 
+                       {{ 'checked' if mount_direction else '' }}>
+                <label for="clockwise">Clockwise</label>
+            </div>
+            <div class="radio-option">
+                <input type="radio" id="counterclockwise" name="mount_direction" value="counterclockwise" 
+                       {{ 'checked' if not mount_direction else '' }}>
+                <label for="counterclockwise">Counterclockwise</label>
+            </div>
+        </div>
+        <input type="submit" value="Apply Mount Settings">
+    </form>
+    <form action="{{ url_for('start_tracking') }}" method="post">
+        <input type="submit" value="Start Tracking" {{ 'disabled' if mount_tracking else '' }}>
+    </form>
+    <form action="{{ url_for('stop_tracking') }}" method="post">
+        <input type="submit" value="Stop Tracking" {{ 'disabled' if not mount_tracking else '' }}>
+    </form>
+    <div class="status">{{ mount_status }}</div>
+</div>

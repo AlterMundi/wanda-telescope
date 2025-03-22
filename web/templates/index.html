@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="preview">
+        <img src="{{ url_for('video_feed') }}" alt="Camera Feed" width="720">
+    </div>
+    <div>
+        <!-- Camera Controls Component -->
+        {% include "components/camera-controls.html" %}
+        
+        <!-- Mount Controls Component -->
+        {% include "components/mount-controls.html" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera-controls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mount-controls.js') }}"></script>
+{% endblock %}

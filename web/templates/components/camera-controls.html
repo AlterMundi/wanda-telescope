@@ -1,0 +1,61 @@
+<div class="controls">
+    <h2>Camera Controls</h2>
+    <form method="post">
+        <p>
+            Shutter Speed (1/10000s - 200s): 
+            <input type="range" name="exposure" min="0" max="1000" step="1" value="{{ slider_value }}"
+                oninput="CameraControls.updateShutter(this.value)">
+            <output id="shutter_display">{{ current_shutter }}</output>
+        </p>
+        <p>
+            ISO (20-1600): 
+            <input type="range" name="iso" min="20" max="1600" step="10" value="{{ current_iso }}"
+                oninput="this.nextElementSibling.value = this.value">
+            <output>{{ current_iso }}</output>
+        </p>
+        <div class="toggle-container">
+            <label class="toggle-option">
+                <input type="checkbox" name="use_digital_gain" {{ 'checked' if use_digital_gain else '' }}
+                       onchange="CameraControls.toggleDigitalGain(this)">
+                <span style="margin-left: 8px;">Digital Gain (Night Sky Boost)</span>
+            </label>
+            <span class="toggle-status">{{ ' (Enabled)' if use_digital_gain else ' (Disabled)' }}</span>
+        </div>
+        <p id="digital-gain-container" {{ 'style="opacity: 1.0;"' if use_digital_gain else 'style="opacity: 0.5;"' }}>
+            Digital Gain Level (1.0-80.0): 
+            <input type="range" name="digital_gain" min="1.0" max="80.0" step="0.1" value="{{ digital_gain }}"
+                oninput="this.nextElementSibling.value = this.value" {{ '' if use_digital_gain else 'disabled' }}>
+            <output>{{ digital_gain }}</output>
+        </p>
+        <div class="toggle-container">
+            <label class="toggle-option">
+                <input type="checkbox" name="save_raw" {{ 'checked' if save_raw else '' }}>
+                <span style="margin-left: 8px;">Save RAW files</span>
+            </label>
+            <span class="toggle-status">{{ ' (Enabled)' if save_raw else ' (Disabled)' }}</span>
+        </div>
+        
+        <p>
+            Performance (CPU Usage vs Quality):
+            <input type="range" name="performance" min="0" max="5" step="1" value="{{ skip_frames }}"
+                oninput="this.nextElementSibling.value = Utils.performanceLabel(this.value)">
+            <output>{{ performance_text }}</output>
+        </p>
+        <input type="submit" value="Apply Settings">
+    </form>
+    
+    <!-- Fixed version with form ID and data attribute instead of inline JS -->
+    <form id="capture-form" action="{{ url_for('capture_still') }}" method="post" 
+          data-exposure-seconds="{{ exposure_seconds }}">
+        <input type="submit" value="Capture Photo" {{ 'disabled' if recording else '' }}>
+    </form>
+    
+    <form action="{{ url_for('start_video') }}" method="post">
+        <input type="submit" value="Start Video" {{ 'disabled' if recording else '' }}>
+    </form>
+    <form action="{{ url_for('stop_video') }}" method="post">
+        <input type="submit" value="Stop Video" {{ 'disabled' if not recording else '' }}>
+    </form>
+    <div class="status" id="countdown"></div>
+    <div class="status" id="status_display">{{ capture_status }}</div>
+</div>
