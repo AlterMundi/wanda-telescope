@@ -6,7 +6,7 @@ import math
 import time
 import logging
 import os
-from flask import Flask, Response, request, redirect, url_for, render_template
+from flask import Flask, Response, request, redirect, url_for, render_template, jsonify
 import config
 from camera.controller import CameraController
 from mount.controller import MountController
@@ -68,8 +68,13 @@ class WandaApp:
         """Handle the main page request."""
         if request.method == 'POST':
             self._handle_post_request()
+            
+            # Return JSON response if this is an AJAX request
+            if request.headers.get('Accept') == 'application/json':
+                template_vars = self._prepare_template_vars()
+                return jsonify(template_vars)
         
-        # Prepare template variables
+        # Prepare template variables for regular page render
         template_vars = self._prepare_template_vars()
         return render_template('index.html', **template_vars)
     
@@ -167,26 +172,78 @@ class WandaApp:
     # Camera route handlers
     def capture_still(self):
         """Capture a still image."""
-        self.camera.capture_still()
+        success = self.camera.capture_still()
+        
+        # If AJAX request, return JSON
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({
+                'success': success,
+                'capture_status': self.camera.capture_status,
+                'recording': self.camera.recording,
+                'exposure_seconds': self.camera.get_exposure_seconds(),
+                'capture_initiated': True
+            })
+        
+        # Otherwise, redirect to index
         return redirect(url_for('index'))
     
     def start_video(self):
         """Start video recording."""
-        self.camera.start_video()
+        success = self.camera.start_video()
+        
+        # If AJAX request, return JSON
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({
+                'success': success,
+                'capture_status': self.camera.capture_status,
+                'recording': self.camera.recording
+            })
+        
+        # Otherwise, redirect to index
         return redirect(url_for('index'))
     
     def stop_video(self):
         """Stop video recording."""
-        self.camera.stop_video()
+        success = self.camera.stop_video()
+        
+        # If AJAX request, return JSON
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({
+                'success': success,
+                'capture_status': self.camera.capture_status,
+                'recording': self.camera.recording
+            })
+        
+        # Otherwise, redirect to index
         return redirect(url_for('index'))
     
     # Mount route handlers
     def start_tracking(self):
         """Start mount tracking."""
-        self.mount.start_tracking()
+        success = self.mount.start_tracking()
+        
+        # If AJAX request, return JSON
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({
+                'success': success,
+                'mount_status': self.mount.status,
+                'mount_tracking': self.mount.tracking
+            })
+        
+        # Otherwise, redirect to index
         return redirect(url_for('index'))
     
     def stop_tracking(self):
         """Stop mount tracking."""
-        self.mount.stop_tracking()
+        success = self.mount.stop_tracking()
+        
+        # If AJAX request, return JSON
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({
+                'success': success,
+                'mount_status': self.mount.status,
+                'mount_tracking': self.mount.tracking
+            })
+        
+        # Otherwise, redirect to index
         return redirect(url_for('index'))
