@@ -19,29 +19,64 @@ const CameraControls = {
     },
     
     /**
-     * Start countdown timer for exposure
-     * @param {number} seconds - Exposure time in seconds
+     * Monitor capture progress without starting a separate countdown
+     * @param {number} expectedSeconds - Expected exposure time in seconds
      */
-    startCountdown: function(seconds) {
-        // Get the countdown element
+    monitorCapture: function(expectedSeconds) {
+        // Start polling for status immediately
+        this.pollCaptureStatus();
+    },
+    
+    /**
+     * Poll for capture status until completion
+     */
+    pollCaptureStatus: function() {
         const countdownElement = document.getElementById('countdown');
         const statusElement = document.getElementById('status_display');
+        let lastStatus = '';
+        let hasStartedCapture = false;
         
-        // Set initial text
-        statusElement.textContent = 'Capturing...';
-        countdownElement.textContent = 'Exposure: ' + seconds + 's remaining';
-        
-        // Start the countdown
-        let timer = setInterval(function() {
-            seconds--;
-            
-            if (seconds <= 0) {
-                clearInterval(timer);
-                countdownElement.textContent = 'Processing...';
-            } else {
-                countdownElement.textContent = 'Exposure: ' + seconds + 's remaining';
-            }
-        }, 1000);
+        // Poll every 500ms to check capture status
+        let statusCheck = setInterval(function() {
+            fetch('/capture_status', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Only update if status has changed
+                if (lastStatus !== data.capture_status) {
+                    lastStatus = data.capture_status;
+                    
+                    // Update status display
+                    if (statusElement) {
+                        statusElement.textContent = data.capture_status;
+                    }
+                    
+                    // Handle countdown display based on status
+                    if (countdownElement) {
+                        if (data.capture_status.includes("Capturing")) {
+                            // Just started capturing
+                            hasStartedCapture = true;
+                        } 
+                        else if (data.capture_status.includes("saved as")) {
+                            // Capture complete
+                            countdownElement.textContent = '';
+                            clearInterval(statusCheck);
+                        } 
+                        else if (hasStartedCapture) {
+                            // In progress, show appropriate message
+                            countdownElement.textContent = 'Processing...';
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking capture status:', error);
+            });
+        }, 300);
     },
     
     /**
@@ -67,14 +102,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Set up capture form with countdown
+    // Set up capture form with status monitoring
     const captureForm = document.getElementById('capture-form');
     if (captureForm) {
         captureForm.addEventListener('submit', function(event) {
             // Get exposure seconds from data attribute
             const seconds = parseInt(this.getAttribute('data-exposure-seconds'), 10);
             if (!isNaN(seconds)) {
-                CameraControls.startCountdown(seconds);
+                CameraControls.monitorCapture(seconds);
             }
             // Allow form submission to continue
             return true;

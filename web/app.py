@@ -41,6 +41,7 @@ class WandaApp:
         self.app.route('/capture_still', methods=['POST'])(self.capture_still)
         self.app.route('/start_video', methods=['POST'])(self.start_video)
         self.app.route('/stop_video', methods=['POST'])(self.stop_video)
+        self.app.route('/capture_status')(self.get_capture_status)
         
         # Mount routes
         self.app.route('/start_tracking', methods=['POST'])(self.start_tracking)
@@ -169,9 +170,18 @@ class WandaApp:
         return Response(generate(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
     
+    def get_capture_status(self):
+        """Return the current capture status."""
+        return jsonify({
+            'capture_status': self.camera.capture_status,
+            'recording': self.camera.recording
+        })
+    
     # Camera route handlers
     def capture_still(self):
         """Capture a still image."""
+        # Update initial status
+        self.camera.capture_status = "Preparing to capture..."
         success = self.camera.capture_still()
         
         # If AJAX request, return JSON
