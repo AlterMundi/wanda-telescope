@@ -1,16 +1,52 @@
 {% extends "base.html" %}
 
+{% block additional_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="preview">
-        <img src="{{ url_for('video_feed') }}" alt="Camera Feed" width="720">
+<div class="modern-container">
+    <!-- Fixed camera viewport -->
+    <div class="fixed-viewport">
+        <div class="fixed-viewport-inner">
+            <img src="{{ url_for('video_feed') }}" alt="Camera Feed">
+        </div>
     </div>
-    <div>
-        <!-- Camera Controls Component -->
-        {% include "components/camera-controls.html" %}
+    
+    <!-- Collapsible side panels -->
+    <div class="side-panels">
+        <!-- Camera controls tab -->
+        <div class="panel-tab" id="camera-tab">
+            <div class="tab-icon" data-panel="camera-panel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v12h14V6H5zm7 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                </svg>
+                <span>Camera</span>
+            </div>
+            <div class="panel-content" id="camera-panel">
+                {% include "components/camera-controls.html" %}
+            </div>
+        </div>
         
-        <!-- Mount Controls Component -->
-        {% include "components/mount-controls.html" %}
+        <!-- Mount controls tab -->
+        <div class="panel-tab" id="mount-tab">
+            <div class="tab-icon" data-panel="mount-panel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm-6 6v-1h12v1h-12zm0-15v-1h12v1h-12zm10-2h2v4h-2v-4zm0 14h2v4h-2v-4zm-10-14h2v4h-2v-4zm0 14h2v4h-2v-4z"/>
+                </svg>
+                <span>Mount</span>
+            </div>
+            <div class="panel-content" id="mount-panel">
+                {% include "components/mount-controls.html" %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status bar at the bottom -->
+    <div class="status-bar">
+        <div id="countdown"></div>
+        <div id="status_display">{{ capture_status }}</div>
+        <div>Saving to: {{ capture_dir }}</div>
     </div>
 </div>
 {% endblock %}
@@ -18,4 +54,5 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/camera-controls.js') }}"></script>
 <script src="{{ url_for('static', filename='js/mount-controls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modern-ui.js') }}"></script>
 {% endblock %}

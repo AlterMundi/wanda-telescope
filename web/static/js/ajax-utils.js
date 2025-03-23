@@ -1,5 +1,6 @@
 /**
  * AJAX utilities for Wanda UI to prevent page reloads
+ * Updated for the modern interface
  */
 const AjaxUtils = {
     /**
@@ -20,7 +21,7 @@ const AjaxUtils = {
         })
         .then(response => response.json())
         .then(data => {
-            // Update status displays
+            // Update status displays in the status bar
             if (data.capture_status) {
                 const statusDisplay = document.getElementById('status_display');
                 if (statusDisplay) {
@@ -29,8 +30,8 @@ const AjaxUtils = {
             }
             
             if (data.mount_status) {
-                // Get the correct status element inside the mount controls
-                const mountStatus = document.querySelector('.controls:nth-of-type(2) .status');
+                // Update mount status in the status bar
+                const mountStatus = document.querySelector('.status-bar #mount_status');
                 if (mountStatus) {
                     mountStatus.textContent = data.mount_status;
                 }

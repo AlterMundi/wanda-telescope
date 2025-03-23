@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
     {% block additional_css %}{% endblock %}
+    <meta name="theme-color" content="#111111">
 </head>
 <body>
     <header>
@@ -16,13 +17,9 @@
         {% block content %}{% endblock %}
     </main>
     
-    <footer>
-        <p class="status">Saving to: {{ capture_dir }}</p>
-    </footer>
-    
     <!-- Common Scripts -->
-<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/ajax-utils.js') }}"></script>
-{% block scripts %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ajax-utils.js') }}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
