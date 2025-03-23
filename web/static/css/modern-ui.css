@@ -31,8 +31,6 @@
     position: relative;
     width: 100%;
     height: 100%;
-    max-width: calc((100vh - 90px) * 4 / 3); /* 4:3 aspect ratio (same as STILL_SIZE) */
-    max-height: calc((100vw) * 3 / 4);
 }
 
 .fixed-viewport img {
@@ -41,7 +39,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover; /* Fill the container completely */
 }
 
 /* Side panels container */

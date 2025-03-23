@@ -58,7 +58,7 @@ const ModernUI = {
     
     /**
      * Adjust the viewport size based on window dimensions
-     * while maintaining 4:3 aspect ratio (same as STILL_SIZE in config)
+     * to maximize the viewport area for the camera feed
      */
     adjustViewport: function() {
         const viewport = document.querySelector('.fixed-viewport');
@@ -69,25 +69,12 @@ const ModernUI = {
         const headerHeight = 50;
         const statusBarHeight = 40;
         const availableHeight = window.innerHeight - headerHeight - statusBarHeight;
-        const availableWidth = window.innerWidth;
         
         viewport.style.height = `${availableHeight}px`;
         
-        // Calculate dimensions that maintain 4:3 aspect ratio
-        // The same ratio as STILL_SIZE (4056x3040)
-        const aspectRatio = 4/3;
-        
-        // Determine whether width or height is the limiting factor
-        const maxWidthBasedOnHeight = availableHeight * aspectRatio;
-        if (maxWidthBasedOnHeight <= availableWidth) {
-            // Height is the limiting factor
-            viewportInner.style.width = `${maxWidthBasedOnHeight}px`;
-            viewportInner.style.height = `${availableHeight}px`;
-        } else {
-            // Width is the limiting factor
-            viewportInner.style.width = `${availableWidth}px`;
-            viewportInner.style.height = `${availableWidth / aspectRatio}px`;
-        }
+        // Make the inner viewport fill the entire container
+        viewportInner.style.width = '100%';
+        viewportInner.style.height = '100%';
     },
     
     /**
