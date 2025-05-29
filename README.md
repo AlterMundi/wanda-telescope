@@ -16,9 +16,11 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a DIY telescope system 
 - **RAW Capture**: Option to save RAW files for post-processing
 - **Video Recording**: Capture videos of celestial events
 - **Responsive Design**: Mobile-friendly UI
+- **Development Mode**: Works on any Linux system with mock hardware interfaces for testing
 
 ## Hardware Requirements
 
+### For Astrophotography (Raspberry Pi Setup)
 - Raspberry Pi (4 recommended for best performance)
 - Raspberry Pi HQ Camera module (IMX-477)
 - Compatible lens or telescope adapter
@@ -26,75 +28,187 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a DIY telescope system 
 - Stepper motor (compatible with pins defined in config.py)
 - Power supply
 
-## Software Requirements
+### For Development/Testing (Any Linux System)
+- Any Linux computer with Python 3
+- Optional: USB webcam (will be used for preview if available)
 
-Python packages (see requirements.txt for full list):
-- Flask
-- picamera2
-- OpenCV (opencv-python)
-- RPi.GPIO
-- NumPy
+## Quick Start
 
-## Installation
+The easiest way to run WANDA is using the automated setup script:
 
-1. Clone this repository:
-   ```
+### 1. Clone and Run
+
+```bash
+git clone https://github.com/yourusername/wanda-telescope.git
+cd wanda-telescope
+chmod +x run_wanda.sh
+./run_wanda.sh
+```
+
+That's it! The script will:
+- ✅ Create a Python virtual environment
+- ✅ Install all required dependencies
+- ✅ Create necessary directories
+- ✅ Start the web server automatically
+
+### 2. Access the Interface
+
+Once running, open your web browser and navigate to:
+- **Local access**: `http://localhost:5000`
+- **Network access**: `http://[your-ip-address]:5000`
+
+The script will display the exact URL when it starts.
+
+### 3. Running Again
+
+You can run the script multiple times safely:
+```bash
+./run_wanda.sh
+```
+It will skip setup steps that are already complete and start the application quickly.
+
+## Manual Installation (Alternative)
+
+If you prefer manual setup or need to customize the installation:
+
+### Prerequisites
+- Python 3.7+ 
+- pip (Python package manager)
+
+### Step-by-step Setup
+
+1. **Clone the repository:**
+   ```bash
    git clone https://github.com/yourusername/wanda-telescope.git
    cd wanda-telescope
    ```
 
-2. Install required packages:
-   ```
-   pip install -r requirements.txt
+2. **Create virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
    ```
 
-3. Create capture directory:
+3. **Install core dependencies:**
+   ```bash
+   pip install Flask opencv-python numpy Jinja2 Werkzeug Pillow
    ```
+
+4. **Install Raspberry Pi packages (if on Raspberry Pi):**
+   ```bash
+   pip install picamera2 RPi.GPIO gpiozero
+   ```
+
+5. **Create capture directory:**
+   ```bash
    mkdir -p ~/wanda_captures
    ```
 
-4. Run the application:
-   ```
+6. **Run the application:**
+   ```bash
    python main.py
    ```
 
 ## Usage
 
-1. Access the web interface by navigating to `http://[raspberry-pi-ip]:5000` in your browser.
+### Web Interface
 
-2. The interface provides two main control panels:
-   - **Camera Controls**: Adjust exposure time, ISO, digital gain, and capture settings
-   - **Mount Controls**: Configure tracking speed and direction
+The modern web interface provides an immersive full-screen experience:
 
-3. Before capturing:
-   - Adjust camera settings for the specific celestial object
-   - Start mount tracking to follow the object's movement
+- **Camera Feed**: Full-screen live preview with optimal viewing
+- **Collapsible Panels**: Side panels for camera and mount controls that slide out when needed
+- **Camera Controls**: 
+  - Exposure settings (1/10000s to 200s)
+  - ISO adjustment (20-1600)
+  - Digital gain for night sky enhancement
+  - RAW file saving option
+  - Performance tuning for CPU usage
+- **Mount Controls**:
+  - Tracking speed configuration
+  - Direction control (clockwise/counterclockwise)
+  - Start/stop tracking
 
-4. Capture options:
-   - Take still photos (with optional RAW format)
-   - Record videos
+### Taking Photos
+
+1. **Adjust camera settings** using the Camera panel
+2. **Start mount tracking** if following celestial objects  
+3. **Click "Capture Photo"** - the interface will show progress
+4. **Files are saved** to `~/wanda_captures` (or USB drive if available)
+
+### Recording Videos
+
+1. Configure your settings
+2. Click "Start Video" to begin recording
+3. Click "Stop Video" when finished
+4. Videos are saved as H.264 files
+
+## System Compatibility
+
+- **Raspberry Pi**: Full functionality with real camera and GPIO control
+- **Development Systems**: Mock interfaces simulate hardware for testing
+- **All Linux Distributions**: The automated script works on any modern Linux system
 
 ## Configuration
 
 The system can be configured by editing `config.py`:
 
-- Camera settings (resolution, default exposure, etc.)
-- Mount settings (GPIO pins, tracking speed)
-- Storage settings (capture locations)
-- Web server settings (host, port)
+- **Camera settings**: Resolution, default exposure, gain settings
+- **Mount settings**: GPIO pins, tracking speed, step sequences
+- **Storage settings**: Capture locations, USB drive preferences  
+- **Web server settings**: Host address, port number
 
-## Project Structure
+## File Structure
 
-- `camera/`: Camera controller and related modules
-- `mount/`: Mount controller for the equatorial tracking system
-- `utils/`: Utility functions for storage management
-- `web/`: Flask web application with UI templates and static assets
-- `config.py`: Configuration settings
-- `main.py`: Main application entry point
+```
+wanda-telescope/
+├── run_wanda.sh          # Automated setup and run script
+├── main.py               # Application entry point
+├── config.py             # Configuration settings
+├── camera/               # Camera controller modules
+├── mount/                # Mount controller for tracking
+├── utils/                # Utility functions
+├── web/                  # Flask web application
+│   ├── templates/        # HTML templates
+│   └── static/          # CSS, JavaScript, images
+├── dev_tools/           # Mock interfaces for development
+└── venv/                # Virtual environment (created by script)
+```
+
+## Troubleshooting
+
+### Script Won't Run
+```bash
+# Make sure the script is executable
+chmod +x run_wanda.sh
+
+# Check if Python 3 is installed
+python3 --version
+```
+
+### Camera Issues on Raspberry Pi
+```bash
+# Check if camera is detected
+vcgencmd get_camera
+
+# Enable camera in raspi-config if needed
+sudo raspi-config
+```
+
+### Network Access Issues
+- Check firewall settings if accessing from other devices
+- Ensure the Raspberry Pi and your device are on the same network
+- Try the IP address shown in the script output
+
+### Port Already in Use
+If port 5000 is busy, edit `config.py` and change the `PORT` setting.
+
+## Development
+
+The project includes mock interfaces that simulate Raspberry Pi hardware, making it easy to develop and test on any Linux system. The automated script detects your environment and configures accordingly.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! The automated script makes it easy for contributors to get started quickly.
 
 ## License
 
