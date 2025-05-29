@@ -5,8 +5,18 @@ Handles equatorial mount initialization and movement control.
 import time
 import threading
 import logging
-import RPi.GPIO as GPIO
 import config
+
+# Try to import RPi.GPIO, fall back to mock if not available
+try:
+    import RPi.GPIO as GPIO
+    MOCK_GPIO = False
+    logging.getLogger(__name__).info("Using real RPi.GPIO library")
+except ImportError:
+    from dev_tools.mock_rpi_gpio import MockGPIO as GPIO
+    MOCK_GPIO = True
+    logging.getLogger(__name__).info("Using mock RPi.GPIO library (development mode)")
+
 
 logger = logging.getLogger(__name__)
 
