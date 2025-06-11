@@ -60,7 +60,7 @@ source venv/bin/activate
 
 # Upgrade pip in virtual environment
 print_status "Ensuring pip is up to date..."
-python -m pip install --upgrade pip --quiet
+python -m pip install --upgrade pip --verbose
 
 # Install requirements
 print_status "Installing/updating Python dependencies..."
@@ -77,12 +77,12 @@ EOF
 
 # Install core dependencies (pip will skip if already satisfied)
 print_status "Ensuring core dependencies are installed..."
-pip install -r temp_requirements.txt --timeout 300 --quiet
+pip install -r temp_requirements.txt --timeout 5 --verbose
 
 # Try Raspberry Pi specific packages
 if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model; then
     print_status "Ensuring Raspberry Pi specific packages are installed..."
-    pip install picamera2 RPi.GPIO gpiozero --timeout 300 --quiet || print_warning "Some Raspberry Pi packages failed to install, using mock interfaces"
+    pip install picamera2 RPi.GPIO gpiozero --timeout 5 --quiet || print_warning "Some Raspberry Pi packages failed to install, using mock interfaces"
 else
     print_status "Non-Raspberry Pi system detected, skipping hardware-specific packages"
 fi

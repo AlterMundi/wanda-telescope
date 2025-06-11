@@ -14,11 +14,9 @@ import logging
 try:
     from picamera2 import Picamera2
     from picamera2.encoders import H264Encoder
-    MOCK_MODE = False
     logging.getLogger(__name__).info("Using real picamera2 library")
 except ImportError:
     from dev_tools.mock_picamera2 import Picamera2, H264Encoder
-    MOCK_MODE = True
     logging.getLogger(__name__).info("Using mock picamera2 library (development mode)")
 
 
