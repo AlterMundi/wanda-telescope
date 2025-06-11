@@ -48,3 +48,5 @@ wanda_captures/
 .DS_Store
 Thumbs.db
 .directory
+
+.cursor
