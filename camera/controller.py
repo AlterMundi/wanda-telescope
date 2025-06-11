@@ -9,9 +9,16 @@ import cv2
 import numpy as np
 import threading
 from datetime import datetime
-from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder
 import logging
+
+try:
+    from picamera2 import Picamera2
+    from picamera2.encoders import H264Encoder
+    logging.getLogger(__name__).info("Using real picamera2 library")
+except ImportError:
+    from dev_tools.mock_picamera2 import Picamera2, H264Encoder
+    logging.getLogger(__name__).info("Using mock picamera2 library (development mode)")
+
 
 from utils.storage import get_capture_dir
 import config

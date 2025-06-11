@@ -41,6 +41,7 @@ wanda_captures/
 # IDE files
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
