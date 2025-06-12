@@ -1,48 +1,59 @@
+"""
+Abstract base class defining the camera interface.
+"""
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Any
 
 class AbstractCamera(ABC):
-    """Abstract base class defining the interface for all camera implementations."""
+    """Abstract camera interface that all implementations must follow."""
+    
+    def __init__(self):
+        self.started = False
+        self.options = {}
     
     @abstractmethod
-    def initialize(self) -> None:
-        """Initialize the camera hardware and prepare it for capture."""
+    def create_preview_configuration(self, main=None):
         pass
     
     @abstractmethod
-    def capture_image(self) -> Tuple[bool, Optional[Any]]:
-        """Capture a single image from the camera.
-        
-        Returns:
-            Tuple[bool, Optional[Any]]: Success status and image data if successful
-        """
+    def create_still_configuration(self, main=None, raw=None):
         pass
     
     @abstractmethod
-    def start_preview(self) -> bool:
-        """Start the camera preview if supported.
-        
-        Returns:
-            bool: True if preview started successfully
-        """
+    def create_video_configuration(self, main=None):
         pass
     
     @abstractmethod
-    def stop_preview(self) -> None:
-        """Stop the camera preview."""
+    def configure(self, config):
         pass
     
     @abstractmethod
-    def close(self) -> None:
-        """Clean up and release camera resources."""
+    def start(self):
         pass
     
-    @property
     @abstractmethod
-    def is_connected(self) -> bool:
-        """Check if the camera is currently connected and available.
-        
-        Returns:
-            bool: True if camera is connected and ready
-        """
-        pass 
+    def stop(self):
+        pass
+    
+    @abstractmethod
+    def capture_array(self, name="main"):
+        pass
+    
+    @abstractmethod
+    def capture_file(self, filename, name=None):
+        pass
+    
+    @abstractmethod
+    def set_controls(self, controls):
+        pass
+    
+    @abstractmethod
+    def start_recording(self, encoder, filename):
+        pass
+    
+    @abstractmethod
+    def stop_recording(self):
+        pass
+    
+    @abstractmethod
+    def cleanup(self):
+        pass
