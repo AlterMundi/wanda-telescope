@@ -169,6 +169,9 @@ class USBCamera(AbstractCamera):
         if not ret:
             raise Exception("Failed to capture frame")
         
+        # Flip the frame horizontally to correct mirroring
+        frame = cv2.flip(frame, 1)
+        
         if self.is_recording and self.video_writer:
             self.video_writer.write(frame)
         
