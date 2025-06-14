@@ -14,22 +14,34 @@ class MountController:
         """Initialize the mount controller."""
         self.mount = MountFactory.create_mount()
         self.mount.initialize()
+        self.status = self.mount.status  # Initialize status from mount
+        self.tracking = self.mount.tracking  # Initialize tracking state from mount
+        self.direction = self.mount.direction  # Initialize direction from mount
+        self.speed = self.mount.speed  # Initialize speed from mount
         logger.info("Mount controller initialized")
     
     def start_tracking(self):
         """Start mount tracking."""
         logger.info("Mount controller: start_tracking()")
-        return self.mount.start_tracking()
+        self.mount.start_tracking()
+        self.status = self.mount.status
+        self.tracking = self.mount.tracking
+        return True
     
     def stop_tracking(self):
         """Stop mount tracking."""
         logger.info("Mount controller: stop_tracking()")
-        return self.mount.stop_tracking()
+        self.mount.stop_tracking()
+        self.status = self.mount.status
+        self.tracking = self.mount.tracking
+        return True
     
     def cleanup(self):
         """Clean up mount resources."""
         logger.info("Mount controller: cleanup()")
         self.mount.cleanup()
+        self.status = self.mount.status
+        self.tracking = self.mount.tracking
 
     def setup_gpio(self):
         """Configure GPIO pins for the stepper motor."""

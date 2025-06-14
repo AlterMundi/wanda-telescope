@@ -11,6 +11,7 @@ class MockMount(AbstractMount):
     
     def __init__(self):
         """Initialize the mock mount."""
+        super().__init__()
         self.tracking = False
         self.direction = True  # True for clockwise
         self.speed = 1.0  # Default speed in seconds
@@ -34,15 +35,13 @@ class MockMount(AbstractMount):
         """Start tracking with the mock mount."""
         logger.info("Mock mount: start_tracking()")
         self.tracking = True
-        self.status = f"Mock mount tracking at {self.speed}s per step"
-        return True
+        self.status = "Mock mount tracking"
     
     def stop_tracking(self):
         """Stop tracking with the mock mount."""
         logger.info("Mock mount: stop_tracking()")
         self.tracking = False
         self.status = "Mock mount stopped"
-        return True
     
     def cleanup(self):
         """Clean up mock mount resources."""

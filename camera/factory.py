@@ -1,45 +1,58 @@
+"""
+Camera factory module for creating camera instances.
+"""
+import logging
+import cv2
 from typing import Optional, Type
 
 from .base import AbstractCamera
 from .detection import get_preferred_camera
 from .exceptions import CameraNotFoundError, CameraInitializationError
+from .implementations.mock_camera import MockCamera
+from .implementations.usb_camera import USBCamera
+
+logger = logging.getLogger(__name__)
 
 class CameraFactory:
     """Factory class for creating camera instances."""
     
     @staticmethod
-    def create_camera(camera_type: Optional[str] = None) -> AbstractCamera:
-        """Create and return a camera instance based on type or auto-detection.
+    def create_camera() -> AbstractCamera:
+        """Create a camera instance based on available hardware.
         
-        Args:
-            camera_type: Optional type of camera to create. If None, auto-detect.
-            
         Returns:
-            AbstractCamera: An instance of the appropriate camera implementation
+            AbstractCamera: A camera instance
             
         Raises:
-            CameraNotFoundError: If no suitable camera is found
             CameraInitializationError: If camera initialization fails
         """
-        # If no specific type requested, auto-detect
-        if camera_type is None:
-            detected = get_preferred_camera()
-            camera_type = detected['type']
-        
-        # Import the appropriate implementation
         try:
-            if camera_type == 'pi_camera':
+            # First try to detect Raspberry Pi camera
+            try:
+                # Import PiCamera only when needed
                 from .implementations.pi_camera import PiCamera
+                import picamera2
+                logger.info("Raspberry Pi camera detected")
                 return PiCamera()
-            elif camera_type == 'usb_camera':
-                from .implementations.usb_camera import USBCamera
-                return USBCamera()
-            else:
-                # Fall back to mock camera for development/testing
-                from .implementations.mock_camera import MockCamera
-                return MockCamera()
-        except ImportError as e:
-            raise CameraInitializationError(f"Failed to import camera module: {str(e)}")
+            except (ImportError, ModuleNotFoundError):
+                logger.info("Raspberry Pi camera not available")
+            
+            # Then try to detect USB camera
+            try:
+                cap = cv2.VideoCapture(0)
+                if cap.isOpened():
+                    ret, _ = cap.read()
+                    cap.release()
+                    if ret:
+                        logger.info("USB camera detected")
+                        return USBCamera()
+            except Exception as e:
+                logger.warning(f"USB camera detection failed: {str(e)}")
+            
+            # If no real camera is available, use mock camera
+            logger.info("No real camera detected, using mock camera")
+            return MockCamera()
+            
         except Exception as e:
             raise CameraInitializationError(f"Failed to initialize camera: {str(e)}")
             
