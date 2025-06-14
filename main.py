@@ -31,6 +31,9 @@ def initialize_camera():
         # Create camera instance using factory
         camera = CameraFactory.create_camera()
         
+        # Initialize the camera hardware
+        camera.initialize()
+        
         # Configure camera for preview
         preview_config = camera.create_preview_configuration()
         camera.configure(preview_config)
