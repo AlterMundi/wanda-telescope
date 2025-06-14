@@ -8,7 +8,7 @@ import logging
 import os
 from flask import Flask, Response, request, redirect, url_for, render_template, jsonify
 import config
-from camera.controller import CameraController
+from camera import CameraFactory
 from mount.controller import MountController
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class WandaApp:
     """Web application for controlling the Wanda system."""
     
-    def __init__(self):
+    def __init__(self, camera=None):
         """Initialize the web application with controllers."""
         # Create Flask app with proper template and static folders
         template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -26,7 +26,7 @@ class WandaApp:
                          template_folder=template_dir,
                          static_folder=static_dir)
                          
-        self.camera = CameraController()
+        self.camera = camera if camera else CameraFactory.create_camera()
         self.mount = MountController()
         self.setup_routes()
         logger.info("Web application initialized")
