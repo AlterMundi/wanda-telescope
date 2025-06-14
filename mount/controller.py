@@ -1,34 +1,34 @@
 """
-Mount controller for Wanda astrophotography system.
-Handles equatorial mount initialization and movement control.
+Mount controller module for managing telescope mount operations.
 """
-import time
-import threading
 import logging
-import RPi.GPIO as GPIO
-import config
+import time
 from .factory import MountFactory
 
 logger = logging.getLogger(__name__)
 
 class MountController:
-    """Controller for managing mount operations."""
-
+    """Controller class for managing telescope mount operations."""
+    
     def __init__(self):
         """Initialize the mount controller."""
         self.mount = MountFactory.create_mount()
         self.mount.initialize()
-
+        logger.info("Mount controller initialized")
+    
     def start_tracking(self):
-        """Start tracking with the mount."""
-        self.mount.start_tracking()
-
+        """Start mount tracking."""
+        logger.info("Mount controller: start_tracking()")
+        return self.mount.start_tracking()
+    
     def stop_tracking(self):
-        """Stop tracking with the mount."""
-        self.mount.stop_tracking()
-
+        """Stop mount tracking."""
+        logger.info("Mount controller: stop_tracking()")
+        return self.mount.stop_tracking()
+    
     def cleanup(self):
         """Clean up mount resources."""
+        logger.info("Mount controller: cleanup()")
         self.mount.cleanup()
 
     def setup_gpio(self):
