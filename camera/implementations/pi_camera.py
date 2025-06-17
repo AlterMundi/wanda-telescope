@@ -11,10 +11,10 @@ from ..base import AbstractCamera
 
 logger = logging.getLogger(__name__)
 
-# Direct imports - we only get here if picamera2 is available
-from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder
-from picamera2.outputs import FileOutput
+# Remove direct imports - we'll import these only when needed
+# from picamera2 import Picamera2
+# from picamera2.encoders import H264Encoder
+# from picamera2.outputs import FileOutput
 
 class PiCamera(AbstractCamera):
     """Raspberry Pi camera implementation."""
@@ -42,10 +42,22 @@ class PiCamera(AbstractCamera):
         
         logger.info("Pi camera initialized")
     
+    def _import_picamera2(self):
+        """Import picamera2 modules only when needed."""
+        try:
+            from picamera2 import Picamera2
+            from picamera2.encoders import H264Encoder
+            from picamera2.outputs import FileOutput
+            return Picamera2, H264Encoder, FileOutput
+        except ImportError as e:
+            logger.error(f"Failed to import picamera2: {e}")
+            raise ImportError("picamera2 module not available. This camera implementation requires a Raspberry Pi.")
+    
     def initialize(self):
         """Initialize the Pi camera hardware."""
         logger.info("Pi camera: initialize()")
         try:
+            Picamera2, _, _ = self._import_picamera2()
             self.camera = Picamera2()
             
             # Create capture directory if it doesn't exist
@@ -126,6 +138,9 @@ class PiCamera(AbstractCamera):
             raise Exception("Camera not initialized")
         
         try:
+            # Import H264Encoder only when needed
+            _, H264Encoder, FileOutput = self._import_picamera2()
+            
             # Stop current session and reconfigure for video
             if self.started:
                 self.camera.stop()
@@ -336,6 +351,7 @@ class PiCamera(AbstractCamera):
         """Start video recording."""
         try:
             filename = f"{self.capture_dir}/video_{int(time.time())}.mp4"
+            _, H264Encoder, _ = self._import_picamera2()
             encoder = H264Encoder(bitrate=10000000)
             self.start_recording(encoder, filename)
             return True

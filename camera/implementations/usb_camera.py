@@ -17,6 +17,7 @@ class USBCamera(AbstractCamera):
     
     def __init__(self):
         """Initialize the USB camera."""
+        super().__init__()  # This will set self.started = False
         self.camera = None
         self.is_recording = False
         self.video_writer = None
@@ -115,6 +116,7 @@ class USBCamera(AbstractCamera):
         logger.info("USB camera: start()")
         if not self.camera:
             self.initialize()
+        self.started = True
         self.status = "USB camera started"
     
     def stop(self):
@@ -125,6 +127,7 @@ class USBCamera(AbstractCamera):
         if self.camera:
             self.camera.release()
             self.camera = None
+        self.started = False
         self.status = "USB camera stopped"
     
     def start_recording(self, filename):

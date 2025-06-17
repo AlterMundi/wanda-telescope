@@ -1,3 +1,6 @@
+"""
+Pytest configuration file that sets up the test environment.
+"""
 import pytest
 import tempfile
 import os
@@ -5,8 +8,11 @@ import shutil
 from unittest.mock import Mock, patch, MagicMock
 import sys
 
-# Add project root to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root directory to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+# This ensures the path is set up before any tests are imported
 
 @pytest.fixture
 def temp_directory():
