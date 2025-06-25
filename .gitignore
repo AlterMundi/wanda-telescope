@@ -56,5 +56,4 @@ Thumbs.db
 .directory
 
 .cursor
-.coverage
-tests/.coverage
+*.coverage
