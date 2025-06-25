@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class USBCamera(AbstractCamera):
     """USB camera implementation using OpenCV."""
     
-    def __init__(self):
+    def __init__(self, capture_dir=None):
         """Initialize the USB camera."""
         super().__init__()  # This will set self.started = False
         self.camera = None
@@ -24,7 +24,7 @@ class USBCamera(AbstractCamera):
         self.status = "USB camera initialized"
         self.exposure_us = 100000  # Default exposure time in microseconds
         self.gain = 1.0  # Default gain value
-        self.exposure_mode = "auto"  # Default exposure mode
+        self.exposure_mode = "manual"  # Default exposure mode
         self.skip_frames = 0  # Number of frames to skip for performance
         self.performance_mode = "normal"  # Performance mode: normal, fast, fastest
         self.use_digital_gain = False  # Whether to use digital gain
@@ -32,8 +32,8 @@ class USBCamera(AbstractCamera):
         self.save_raw = False  # Whether to save raw images
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status
-        self.capture_dir = "captures"  # Directory for saved images
-        logger.info("USB camera initialized")
+        self.capture_dir = capture_dir if capture_dir else "captures"  # Directory for saved images
+        logger.info("USB camera instance created")
     
     def initialize(self):
         """Initialize the USB camera hardware."""

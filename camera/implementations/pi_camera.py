@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 # from picamera2.outputs import FileOutput
 
 class PiCamera(AbstractCamera):
-    """Raspberry Pi camera implementation."""
+    """Raspberry Pi camera implementation using picamera2."""
     
-    def __init__(self):
+    def __init__(self, capture_dir=None):
         """Initialize the Pi camera."""
         super().__init__()
         self.camera = None
@@ -36,11 +36,11 @@ class PiCamera(AbstractCamera):
         self.save_raw = False  # Whether to save raw images
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status
-        self.capture_dir = "captures"  # Directory for saved images
+        self.capture_dir = capture_dir if capture_dir else "captures"  # Directory for saved images
         self.skip_frames = 0  # Performance setting
         self.exposure_mode = "manual"  # Exposure mode
         
-        logger.info("Pi camera initialized")
+        logger.info("Pi camera instance created")
     
     def _import_picamera2(self):
         """Import picamera2 modules only when needed."""
