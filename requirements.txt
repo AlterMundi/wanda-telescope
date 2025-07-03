@@ -1,7 +1,15 @@
+# Production dependencies
 Flask==2.2.2
 Werkzeug==2.2.2
 Jinja2==3.1.2
 opencv-python==4.11.0.86
 numpy==1.24.2
 Pillow==9.4.0
+
+# Test dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+pytest-flask>=1.2.0
+responses>=0.23.0
 
