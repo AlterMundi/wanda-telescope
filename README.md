@@ -41,8 +41,8 @@ The easiest way to run WANDA is using the automated setup script:
 ```bash
 git clone https://github.com/yourusername/wanda-telescope.git
 cd wanda-telescope
-chmod +x run_wanda.sh
-./run_wanda.sh
+chmod +x run-wanda.sh
+./run-wanda.sh
 ```
 
 That's it! The script will:
@@ -63,7 +63,7 @@ The script will display the exact URL when it starts.
 
 You can run the script multiple times safely:
 ```bash
-./run_wanda.sh
+./run-wanda.sh
 ```
 It will skip setup steps that are already complete and start the application quickly.
 
@@ -161,7 +161,7 @@ The system can be configured by editing `config.py`:
 
 ```
 wanda-telescope/
-├── run_wanda.sh          # Automated setup and run script
+├── run-wanda.sh          # Automated setup and run script
 ├── main.py               # Application entry point
 ├── config.py             # Configuration settings
 ├── camera/               # Camera controller modules
@@ -179,7 +179,7 @@ wanda-telescope/
 ### Script Won't Run
 ```bash
 # Make sure the script is executable
-chmod +x run_wanda.sh
+chmod +x run-wanda.sh
 
 # Check if Python 3 is installed
 python3 --version
