@@ -38,6 +38,12 @@ ENV/
 wanda.log
 wanda_captures/
 
+# Test captures
+tests/captures/
+test_captures_*/
+capture_*.jpg
+video_*.mp4
+
 # IDE files
 .idea/
 .vscode/
@@ -49,3 +55,6 @@ wanda_captures/
 .DS_Store
 Thumbs.db
 .directory
+
+.cursor
+*.coverage
