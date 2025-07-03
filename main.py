@@ -40,27 +40,27 @@ def initialize_camera():
         
         # Start the camera
         camera.start()
-        logger.info("Camera initialized successfully")
+        print("Camera initialized successfully")
         return camera
     except Exception as e:
-        logger.error(f"Failed to initialize camera: {e}")
+        print(f"Failed to initialize camera: {e}")
         return None
 
 def signal_handler(sig, frame):
     """Handle termination signals."""
-    logger.info("Received termination signal, shutting down...")
+    print("Received termination signal, shutting down...")
     if 'camera' in globals() and camera is not None:
         try:
             camera.stop()
             camera.cleanup()
-            logger.info("Camera stopped and cleaned up")
+            print("Camera stopped and cleaned up")
         except Exception as e:
-            logger.error(f"Error during camera cleanup: {e}")
+            print(f"Error during camera cleanup: {e}")
     sys.exit(0)
 
 def main():
     """Main application entry point."""
-    logger.info("Starting Wanda Astrophotography System")
+    print("Starting Wanda Astrophotography System")
     
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
@@ -75,7 +75,7 @@ def main():
     try:
         app.run()
     except Exception as e:
-        logger.error(f"Error running application: {e}")
+        print(f"Error running application: {e}")
         if camera is not None:
             try:
                 camera.stop()

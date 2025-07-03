@@ -11,6 +11,10 @@ class AbstractCamera(ABC):
         self.options = {}
     
     @abstractmethod
+    def initialize(self):
+        pass
+    
+    @abstractmethod
     def create_preview_configuration(self, main=None):
         pass
     
