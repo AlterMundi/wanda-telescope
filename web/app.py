@@ -10,6 +10,7 @@ from flask import Flask, Response, request, redirect, url_for, render_template, 
 import config
 from camera import CameraFactory
 from mount.controller import MountController
+from session import SessionController
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class WandaApp:
                          
         self.camera = camera if camera else CameraFactory.create_camera()
         self.mount = MountController()
+        self.session_controller = SessionController(self.camera, self.mount, self.camera.capture_dir)
         self.setup_routes()
         logger.info("Web application initialized")
     
@@ -46,6 +48,11 @@ class WandaApp:
         # Mount routes
         self.app.route('/start_tracking', methods=['POST'])(self.start_tracking)
         self.app.route('/stop_tracking', methods=['POST'])(self.stop_tracking)
+        
+        # Session routes
+        self.app.route('/start_session', methods=['POST'])(self.start_session)
+        self.app.route('/stop_session', methods=['POST'])(self.stop_session)
+        self.app.route('/session_status')(self.get_session_status)
     
     def run(self):
         """Run the web application."""
@@ -62,6 +69,7 @@ class WandaApp:
         logger.info("Application shutting down, cleaning up resources...")
         self.camera.cleanup()
         self.mount.cleanup()
+        self.session_controller.cleanup()
         logger.info("Application shutdown complete")
     
     # Route handlers
@@ -257,3 +265,61 @@ class WandaApp:
         
         # Otherwise, redirect to index
         return redirect(url_for('index'))
+    
+    # Session route handlers
+    def start_session(self):
+        """Start a capture session."""
+        try:
+            # Get session parameters from form
+            name = request.form.get('session_name', '').strip()
+            total_images = request.form.get('total_images', type=int)
+            use_current_settings = 'use_current_settings' in request.form
+            enable_tracking = 'enable_tracking' in request.form
+            
+            # Validate required parameters
+            if not name:
+                return jsonify({'success': False, 'error': 'Session name is required'})
+            
+            if not total_images or total_images <= 0:
+                return jsonify({'success': False, 'error': 'Total images must be greater than 0'})
+            
+            # Start the session
+            success = self.session_controller.start_session(
+                name=name,
+                total_images=total_images,
+                use_current_settings=use_current_settings,
+                enable_tracking=enable_tracking
+            )
+            
+            return jsonify({
+                'success': success,
+                'session_status': self.session_controller.get_session_status()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error starting session: {e}")
+            return jsonify({'success': False, 'error': str(e)})
+    
+    def stop_session(self):
+        """Stop the current session."""
+        try:
+            success = self.session_controller.stop_session()
+            
+            return jsonify({
+                'success': success,
+                'session_status': self.session_controller.get_session_status()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error stopping session: {e}")
+            return jsonify({'success': False, 'error': str(e)})
+    
+    def get_session_status(self):
+        """Get current session status."""
+        try:
+            status = self.session_controller.get_session_status()
+            return jsonify(status)
+            
+        except Exception as e:
+            logger.error(f"Error getting session status: {e}")
+            return jsonify({'error': str(e)})

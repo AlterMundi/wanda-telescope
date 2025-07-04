@@ -66,3 +66,47 @@ output {
     font-size: 0.8em;
     color: #aaa;
 }
+
+/* Session progress bar */
+.progress-container {
+    margin: 15px 0;
+    position: relative;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #333;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: #00b7eb;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+}
+
+.session-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.session-info div {
+    margin: 2px 0;
+}

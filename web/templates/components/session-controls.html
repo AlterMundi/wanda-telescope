@@ -1,0 +1,53 @@
+<div class="controls">
+    <h2>Session Controls</h2>
+    
+    <!-- Session Configuration Form -->
+    <form id="session-form" action="{{ url_for('start_session') }}" method="post">
+        <p>
+            Session Name: 
+            <input type="text" name="session_name" placeholder="e.g., moon_sequence" required>
+        </p>
+        <p>
+            Total Images: 
+            <input type="number" name="total_images" min="1" max="1000" value="10" required>
+        </p>
+        <div class="toggle-container">
+            <label class="toggle-option">
+                <input type="checkbox" name="use_current_settings" checked>
+                <span style="margin-left: 8px;">Use Current Camera Settings</span>
+            </label>
+            <span class="toggle-status"> (Enabled)</span>
+        </div>
+        <div class="toggle-container">
+            <label class="toggle-option">
+                <input type="checkbox" name="enable_tracking">
+                <span style="margin-left: 8px;">Enable Mount Tracking</span>
+            </label>
+            <span class="toggle-status"> (Disabled)</span>
+        </div>
+        <input type="submit" value="Start Session" id="start-session-btn">
+    </form>
+    
+    <!-- Session Control Buttons -->
+    <form action="{{ url_for('stop_session') }}" method="post" id="stop-session-form" style="display: none;">
+        <input type="submit" value="Stop Session" id="stop-session-btn">
+    </form>
+    
+    <!-- Session Progress Display -->
+    <div id="session-progress" style="display: none;">
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text" id="progress-text">0%</div>
+        </div>
+        <div class="session-info">
+            <div id="session-name"></div>
+            <div id="session-count">0 / 0 images</div>
+            <div id="session-time">Elapsed: 0s</div>
+        </div>
+    </div>
+    
+    <!-- Session Status -->
+    <div class="status" id="session-status">Ready to start session</div>
+</div> 

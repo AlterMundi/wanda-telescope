@@ -35,8 +35,10 @@ ENV/
 *.dng
 *.h264
 *.mp4
+*.log
 wanda.log
 wanda_captures/
+captures/
 
 # Test captures
 tests/captures/

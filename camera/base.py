@@ -9,6 +9,16 @@ class AbstractCamera(ABC):
     def __init__(self):
         self.started = False
         self.options = {}
+        # Common attributes that app.py expects
+        self.exposure_us = 100000  # Default exposure time in microseconds
+        self.gain = 1.0  # Default gain value
+        self.use_digital_gain = False  # Whether to use digital gain
+        self.digital_gain = 1.0  # Digital gain value
+        self.save_raw = False  # Whether to save raw images
+        self.recording = False  # Whether currently recording
+        self.capture_status = "Ready"  # Current capture status
+        self.capture_dir = "captures"  # Directory for saved images
+        self.skip_frames = 0  # Performance setting
     
     @abstractmethod
     def initialize(self):
@@ -61,3 +71,59 @@ class AbstractCamera(ABC):
     @abstractmethod
     def cleanup(self):
         pass
+    
+    # Additional methods that app.py expects
+    def update_camera_settings(self):
+        """Update camera settings based on current attributes."""
+        pass
+    
+    def start_video(self):
+        """Start video recording."""
+        return self.start_recording(None, None)
+    
+    def stop_video(self):
+        """Stop video recording."""
+        return self.stop_recording()
+    
+    def get_frame(self):
+        """Get a frame as JPEG data."""
+        pass
+    
+    def capture_still(self):
+        """Capture a still image."""
+        pass
+    
+    def us_to_shutter_string(self, us):
+        """Convert microseconds to a human-readable shutter speed string."""
+        if us >= 1000000:  # 1 second or longer
+            return f"{us/1000000:.1f}s"
+        else:
+            return f"1/{int(1000000/us)}"
+    
+    def gain_to_iso(self, gain):
+        """Convert gain value to ISO equivalent."""
+        return int(gain * 100)
+    
+    def iso_to_gain(self, iso):
+        """Convert ISO value to gain."""
+        return iso / 100.0
+    
+    def slider_to_us(self, slider_value):
+        """Convert slider value to microseconds."""
+        import math
+        min_us = 100
+        max_us = 200_000_000
+        log_range = math.log(max_us / min_us)
+        return int(min_us * math.exp(slider_value * log_range / 1000))
+    
+    def get_exposure_seconds(self):
+        """Get the current exposure time in seconds."""
+        return self.exposure_us / 1000000.0
+    
+    def get_exposure_us(self):
+        """Get the current exposure time in microseconds."""
+        return self.exposure_us
+    
+    def set_exposure_us(self, us):
+        """Set the exposure time in microseconds."""
+        self.exposure_us = us

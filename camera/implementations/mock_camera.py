@@ -153,7 +153,7 @@ class MockCamera(AbstractCamera):
             if frame is not None:
                 # Apply digital gain if enabled
                 if self.use_digital_gain and self.digital_gain > 1.0:
-                    frame = cv2.multiply(frame, self.digital_gain)
+                    frame = (frame * self.digital_gain).astype(np.uint8)
                 
                 # Convert to JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -170,7 +170,7 @@ class MockCamera(AbstractCamera):
             
             # Apply digital gain if enabled
             if self.use_digital_gain and self.digital_gain > 1.0:
-                frame = cv2.multiply(frame, self.digital_gain)
+                frame = (frame * self.digital_gain).astype(np.uint8)
             
             # Save the image
             filename = f"{self.capture_dir}/capture_{int(time.time())}.jpg"
@@ -181,6 +181,37 @@ class MockCamera(AbstractCamera):
         except Exception as e:
             self.capture_status = f"Capture failed: {str(e)}"
             logger.error(f"Error capturing still: {e}")
+            return False
+    
+    def update_camera_settings(self):
+        """Update camera settings based on current attributes."""
+        logger.debug("Mock camera: update_camera_settings()")
+        # In mock camera, settings are applied immediately
+        # This method exists for interface compatibility
+        pass
+    
+    def start_video(self):
+        """Start video recording."""
+        try:
+            self.capture_status = "Starting video recording..."
+            self.recording = True
+            self.capture_status = "Video recording"
+            return True
+        except Exception as e:
+            self.capture_status = f"Failed to start video: {str(e)}"
+            logger.error(f"Error starting video: {e}")
+            return False
+    
+    def stop_video(self):
+        """Stop video recording."""
+        try:
+            self.capture_status = "Stopping video recording..."
+            self.recording = False
+            self.capture_status = "Video stopped"
+            return True
+        except Exception as e:
+            self.capture_status = f"Failed to stop video: {str(e)}"
+            logger.error(f"Error stopping video: {e}")
             return False
 
 # Mock encoder class
