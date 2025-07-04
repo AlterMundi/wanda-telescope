@@ -263,6 +263,10 @@ const SessionControls = {
                 // Session error
                 this.updateUIForIdleSession();
                 this.updateStatus('Session error occurred');
+            } else if (!data.running && data.images_captured >= data.total_images) {
+                // Session finished naturally but status hasn't been updated yet
+                this.updateUIForIdleSession();
+                this.updateStatus('Session completed successfully');
             }
         })
         .catch(error => {

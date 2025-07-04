@@ -36,6 +36,7 @@ class SessionController:
         self.current_session = None
         self.session_thread = None
         self.session_running = False
+        self._session_lock = threading.Lock()  # Add lock to prevent race conditions
         
         # Session configuration
         self.session_config = {
@@ -69,55 +70,56 @@ class SessionController:
             SessionAlreadyRunningError: If a session is already running
             SessionConfigurationError: If configuration is invalid
         """
-        if self.session_running:
-            raise SessionAlreadyRunningError("A session is already running")
-        
-        # Validate configuration
-        if not name or not name.strip():
-            raise SessionConfigurationError("Session name cannot be empty")
-        
-        if total_images <= 0:
-            raise SessionConfigurationError("Total images must be greater than 0")
-        
-        # Create session directory
-        session_dir = os.path.join(self.base_capture_dir, name)
-        
-        try:
-            os.makedirs(session_dir, exist_ok=True)
-        except Exception as e:
-            raise SessionConfigurationError(f"Failed to create session directory: {str(e)}")
-        
-        # Configure session
-        self.session_config.update({
-            'name': name,
-            'total_images': total_images,
-            'use_current_settings': use_current_settings,
-            'enable_tracking': enable_tracking,
-            'start_time': datetime.now().isoformat(),
-            'end_time': None,
-            'images_captured': 0,
-            'session_dir': session_dir,
-            'status': 'running'
-        })
-        
-        # Save session metadata
-        self._save_session_metadata()
-        
-        # Start mount tracking if enabled
-        if enable_tracking and not self.mount.tracking:
+        with self._session_lock:
+            if self.session_running:
+                raise SessionAlreadyRunningError("A session is already running")
+            
+            # Validate configuration
+            if not name or not name.strip():
+                raise SessionConfigurationError("Session name cannot be empty")
+            
+            if total_images <= 0:
+                raise SessionConfigurationError("Total images must be greater than 0")
+            
+            # Create session directory
+            session_dir = os.path.join(self.base_capture_dir, name)
+            
             try:
-                self.mount.start_tracking()
-                logger.info("Mount tracking started for session")
+                os.makedirs(session_dir, exist_ok=True)
             except Exception as e:
-                logger.warning(f"Failed to start mount tracking: {e}")
-        
-        # Start session thread
-        self.session_running = True
-        self.session_thread = threading.Thread(target=self._session_worker, daemon=True)
-        self.session_thread.start()
-        
-        logger.info(f"Session '{name}' started: {total_images} images")
-        return True
+                raise SessionConfigurationError(f"Failed to create session directory: {str(e)}")
+            
+            # Configure session
+            self.session_config.update({
+                'name': name,
+                'total_images': total_images,
+                'use_current_settings': use_current_settings,
+                'enable_tracking': enable_tracking,
+                'start_time': datetime.now().isoformat(),
+                'end_time': None,
+                'images_captured': 0,
+                'session_dir': session_dir,
+                'status': 'running'
+            })
+            
+            # Save session metadata
+            self._save_session_metadata()
+            
+            # Start mount tracking if enabled
+            if enable_tracking and not self.mount.tracking:
+                try:
+                    self.mount.start_tracking()
+                    logger.info("Mount tracking started for session")
+                except Exception as e:
+                    logger.warning(f"Failed to start mount tracking: {e}")
+            
+            # Start session thread
+            self.session_running = True
+            self.session_thread = threading.Thread(target=self._session_worker, daemon=True)
+            self.session_thread.start()
+            
+            logger.info(f"Session '{name}' started: {total_images} images")
+            return True
     
     def stop_session(self) -> bool:
         """Stop the current session.
@@ -125,12 +127,13 @@ class SessionController:
         Returns:
             bool: True if session stopped successfully
         """
-        if not self.session_running and self.session_config['status'] == 'completed':
-            logger.info("Session already completed")
-            return True
-        
-        logger.info("Stopping session...")
-        self.session_running = False
+        with self._session_lock:
+            if not self.session_running and self.session_config['status'] == 'completed':
+                logger.info("Session already completed")
+                return True
+            
+            logger.info("Stopping session...")
+            self.session_running = False
         
         # Wait for session thread to finish
         if self.session_thread and self.session_thread.is_alive():
@@ -160,30 +163,31 @@ class SessionController:
         Returns:
             Dict containing session status information
         """
-        # Calculate progress and elapsed time
-        total_images = self.session_config['total_images']
-        images_captured = self.session_config['images_captured']
-        progress = (images_captured / total_images * 100) if total_images > 0 else 0
-        
-        # Calculate elapsed time
-        elapsed_time = 0
-        if self.session_config['start_time']:
-            start_time = datetime.fromisoformat(self.session_config['start_time'])
-            elapsed_time = int((datetime.now() - start_time).total_seconds())
-        
-        # Base status response
-        status_response = {
-            'running': self.session_running,
-            'status': self.session_config['status'],
-            'name': self.session_config['name'],
-            'total_images': total_images,
-            'images_captured': images_captured,
-            'progress': round(progress, 1),
-            'elapsed_time': elapsed_time,
-            'session_dir': self.session_config['session_dir']
-        }
-        
-        return status_response
+        with self._session_lock:
+            # Calculate progress and elapsed time
+            total_images = self.session_config['total_images']
+            images_captured = self.session_config['images_captured']
+            progress = (images_captured / total_images * 100) if total_images > 0 else 0
+            
+            # Calculate elapsed time
+            elapsed_time = 0
+            if self.session_config['start_time']:
+                start_time = datetime.fromisoformat(self.session_config['start_time'])
+                elapsed_time = int((datetime.now() - start_time).total_seconds())
+            
+            # Base status response
+            status_response = {
+                'running': self.session_running,
+                'status': self.session_config['status'],
+                'name': self.session_config['name'],
+                'total_images': total_images,
+                'images_captured': images_captured,
+                'progress': round(progress, 1),
+                'elapsed_time': elapsed_time,
+                'session_dir': self.session_config['session_dir']
+            }
+            
+            return status_response
     
     def _session_worker(self):
         """Background worker thread for session capture."""
@@ -192,36 +196,44 @@ class SessionController:
         try:
             while self.session_running:
                 # Check if we've captured all images
-                if self.session_config['images_captured'] >= self.session_config['total_images']:
-                    logger.info("Session completed - all images captured")
-                    break
+                with self._session_lock:
+                    if self.session_config['images_captured'] >= self.session_config['total_images']:
+                        logger.info("Session completed - all images captured")
+                        break
                 
                 # Capture image
                 if self._capture_session_image():
-                    self.session_config['images_captured'] += 1
-                    self._save_session_metadata()
-                    
-                    logger.info(f"Captured image {self.session_config['images_captured']}/"
-                              f"{self.session_config['total_images']}")
+                    with self._session_lock:
+                        self.session_config['images_captured'] += 1
+                        self._save_session_metadata()
+                        
+                        logger.info(f"Captured image {self.session_config['images_captured']}/"
+                                  f"{self.session_config['total_images']}")
                 
                 # Small delay between captures to prevent overwhelming the camera
-                if (self.session_running and 
-                    self.session_config['images_captured'] < self.session_config['total_images']):
-                    time.sleep(0.5)  # 500ms delay between captures
+                with self._session_lock:
+                    if (self.session_running and 
+                        self.session_config['images_captured'] < self.session_config['total_images']):
+                        time.sleep(0.5)  # 500ms delay between captures
         
         except Exception as e:
             logger.error(f"Session worker error: {e}")
-            self.session_config['status'] = 'error'
-            self._save_session_metadata()
+            with self._session_lock:
+                self.session_config['status'] = 'error'
+                self._save_session_metadata()
             logger.error(f"Session status set to error in except block")
             return  # Exit the worker immediately on error
         
         finally:
             self.session_running = False
-            logger.info(f"Session status at finally: {self.session_config['status']}")
-            # Only set to completed if still running (i.e., no error occurred)
-            # Note: We don't set status to 'completed' here - that only happens when stop_session() is called
-            # We also don't stop mount tracking here - that only happens when stop_session() is called
+            with self._session_lock:
+                logger.info(f"Session status at finally: {self.session_config['status']}")
+                # Set status to completed when session finishes naturally
+                if self.session_config['status'] == 'running':
+                    self.session_config['status'] = 'completed'
+                    self._save_session_metadata()
+                    logger.info("Session status set to completed")
+            # Note: We don't stop mount tracking here - that only happens when stop_session() is called
             logger.info("Session worker finished")
     
     def _capture_session_image(self) -> bool:
