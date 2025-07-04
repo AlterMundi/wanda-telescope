@@ -70,10 +70,8 @@ class TestSessionIntegration:
         assert session_controller.session_config['status'] == 'completed'
         
         # Check session directory was created
-        session_dirs = [d for d in os.listdir(temp_capture_dir) if d.startswith('session_integration_test_')]
-        assert len(session_dirs) == 1
-        
-        session_dir = os.path.join(temp_capture_dir, session_dirs[0])
+        session_dir = os.path.join(temp_capture_dir, 'integration_test')
+        assert os.path.exists(session_dir)
         assert os.path.exists(session_dir)
         
         # Check metadata file was created
@@ -194,15 +192,8 @@ class TestSessionIntegration:
         session_controller.stop_session()
         
         # Check directory structure
-        session_dirs = [d for d in os.listdir(temp_capture_dir) if d.startswith('session_structure_test_')]
-        assert len(session_dirs) == 1
-        
-        session_dir = os.path.join(temp_capture_dir, session_dirs[0])
-        
-        # Check directory name format: session_[name]_[timestamp]
-        dir_name = session_dirs[0]
-        assert dir_name.startswith('session_structure_test_')
-        assert len(dir_name.split('_')) >= 3
+        session_dir = os.path.join(temp_capture_dir, 'structure_test')
+        assert os.path.exists(session_dir)
         
         # Check required files exist
         assert os.path.exists(os.path.join(session_dir, 'session_metadata.json'))
@@ -223,10 +214,8 @@ class TestSessionIntegration:
         session_controller.stop_session()
         
         # Find session directory
-        session_dirs = [d for d in os.listdir(temp_capture_dir) if d.startswith('session_metadata_test_')]
-        assert len(session_dirs) == 1
-        
-        session_dir = os.path.join(temp_capture_dir, session_dirs[0])
+        session_dir = os.path.join(temp_capture_dir, 'metadata_test')
+        assert os.path.exists(session_dir)
         metadata_file = os.path.join(session_dir, 'session_metadata.json')
         
         # Read and verify metadata

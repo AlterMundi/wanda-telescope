@@ -80,8 +80,7 @@ class SessionController:
             raise SessionConfigurationError("Total images must be greater than 0")
         
         # Create session directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        session_dir = os.path.join(self.base_capture_dir, f"session_{name}_{timestamp}")
+        session_dir = os.path.join(self.base_capture_dir, name)
         
         try:
             os.makedirs(session_dir, exist_ok=True)
