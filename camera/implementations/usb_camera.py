@@ -42,6 +42,11 @@ class USBCamera(AbstractCamera):
             self.camera = cv2.VideoCapture(0)
             if not self.camera.isOpened():
                 raise Exception("Failed to open USB camera")
+            # Force MJPG format to get higher resolutions
+            self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G'))
+            # Force 1280x720 resolution
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.status = "USB camera ready"
         except Exception as e:
             self.status = f"USB camera error: {str(e)}"
@@ -75,8 +80,8 @@ class USBCamera(AbstractCamera):
     def create_preview_configuration(self):
         """Create preview configuration."""
         return {
-            'width': 640,
-            'height': 480,
+            'width': 1280,
+            'height': 720,
             'fps': 30
         }
     
@@ -172,11 +177,15 @@ class USBCamera(AbstractCamera):
         if not ret:
             raise Exception("Failed to capture frame")
         
+        print(f"[DEBUG] Captured frame shape: {frame.shape}")
         # Flip the frame horizontally to correct mirroring
         frame = cv2.flip(frame, 1)
         
         if self.is_recording and self.video_writer:
             self.video_writer.write(frame)
+        
+        if self.use_digital_gain and self.digital_gain > 1.0:
+            frame = frame * self.digital_gain
         
         return frame
     
@@ -353,7 +362,7 @@ class USBCamera(AbstractCamera):
             if frame is not None:
                 # Apply digital gain if enabled
                 if self.use_digital_gain and self.digital_gain > 1.0:
-                    frame = cv2.multiply(frame, self.digital_gain)
+                    frame = frame * self.digital_gain
                 
                 # Convert to JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -374,7 +383,7 @@ class USBCamera(AbstractCamera):
             
             # Apply digital gain if enabled
             if self.use_digital_gain and self.digital_gain > 1.0:
-                frame = cv2.multiply(frame, self.digital_gain)
+                frame = frame * self.digital_gain
             
             # Save the image
             filename = f"{self.capture_dir}/capture_{int(time.time())}.jpg"

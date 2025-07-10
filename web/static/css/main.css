@@ -3,7 +3,7 @@ body {
     background-color: #1a1a1a;
     color: #e0e0e0;
     font-family: Arial, sans-serif;
-    margin: 20px;
+    margin: 0;
 }
 
 h1, h2 {
@@ -11,16 +11,120 @@ h1, h2 {
     color: #00b7eb;
 }
 
-.container {
+/* New two-column layout */
+.main-flex-layout {
     display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    justify-content: center;
+    flex-direction: row;
+    height: calc(100vh - 80px);
+    gap: 0;
+    margin-top: 60px; /* Space for the top bar */
+}
+.menu-panel {
+    width: 340px;
+    min-width: 260px;
+    max-width: 400px;
+    background: #23272e;
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px 0 0 12px;
+    box-shadow: 2px 0 8px #0004;
+    margin-right: 0;
+    z-index: 2;
+    margin-top: 0;
+}
+.menu-tabs {
+    display: flex;
+    flex-direction: row;
+    background: #181c22;
+    border-radius: 12px 0 0 0;
+    overflow: hidden;
+    margin-top: 0;
+}
+.menu-tab {
+    flex: 1;
+    padding: 16px 0;
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 1.1em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.menu-tab.active {
+    background: #00b7eb;
+    color: #181c22;
+    font-weight: bold;
+}
+.menu-tab:not(.active):hover {
+    background: #222b33;
+}
+.menu-content {
+    flex: 1;
+    padding: 24px 18px 18px 18px;
+    overflow-y: auto;
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
 }
 
-.preview {
-    flex: 1;
-    max-width: 720px;
+/* Camera panel on the right - fill all available space */
+.camera-panel {
+    flex: 1 1 0%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #181c22;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 0 8px #0004;
+    min-width: 320px;
+    margin-top: 0;
+}
+.camera-viewport {
+    width: 90%;
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #111;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 0 12px #0006;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.camera-viewport img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+@supports not (aspect-ratio: 16 / 9) {
+  .camera-viewport {
+    position: relative;
+    width: 90%;
+    max-width: 100%;
+    padding-top: 56.25%; /* 16:9 ratio fallback */
+    height: 0;
+  }
+  .camera-viewport img {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+  }
+}
+
+.status-bar {
+    margin-top: 0;
+    padding: 10px;
+    background: #333;
+    border-radius: 0 0 12px 12px;
+    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1em;
 }
 
 /* Common UI components */
@@ -57,12 +161,19 @@ input[type="range"] {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
-    .container {
+@media (max-width: 900px) {
+    .main-flex-layout {
         flex-direction: column;
+        height: auto;
+        margin-top: 60px;
     }
-    
-    .preview, .controls {
+    .menu-panel, .camera-panel {
         max-width: 100%;
+        width: 100%;
+        border-radius: 12px 12px 0 0;
+    }
+    .camera-viewport {
+        width: 100vw;
+        height: 40vh;
     }
 }
