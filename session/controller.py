@@ -48,7 +48,8 @@ class SessionController:
             'end_time': None,
             'images_captured': 0,
             'session_dir': '',
-            'status': 'idle'
+            'status': 'idle',
+            'mount_tracking_stopped': False
         }
         
         logger.info("Session controller initialized")
@@ -99,7 +100,8 @@ class SessionController:
                 'end_time': None,
                 'images_captured': 0,
                 'session_dir': session_dir,
-                'status': 'running'
+                'status': 'running',
+                'mount_tracking_stopped': False
             })
             
             # Save session metadata
@@ -141,14 +143,16 @@ class SessionController:
         
         # Update session metadata
         self.session_config['end_time'] = datetime.now().isoformat()
-        self.session_config['status'] = 'completed'
+        if self.session_config['status'] == 'running':
+            self.session_config['status'] = 'completed'
         self._save_session_metadata()
         
         # Stop mount tracking if it was started by the session
         if (self.session_config.get('enable_tracking', False) and 
-            self.mount.tracking):
+            self.mount.tracking and not self.session_config.get('mount_tracking_stopped', False)):
             try:
                 self.mount.stop_tracking()
+                self.session_config['mount_tracking_stopped'] = True
                 logger.info("Mount tracking stopped")
             except Exception as e:
                 logger.warning(f"Failed to stop mount tracking: {e}")
@@ -221,19 +225,30 @@ class SessionController:
             with self._session_lock:
                 self.session_config['status'] = 'error'
                 self._save_session_metadata()
-            logger.error(f"Session status set to error in except block")
+                logger.error(f"Session status set to error in except block: {self.session_config['status']}")
             return  # Exit the worker immediately on error
         
         finally:
             self.session_running = False
             with self._session_lock:
                 logger.info(f"Session status at finally: {self.session_config['status']}")
-                # Set status to completed when session finishes naturally
+                # Only set status to completed if it's still running (not error)
                 if self.session_config['status'] == 'running':
                     self.session_config['status'] = 'completed'
                     self._save_session_metadata()
                     logger.info("Session status set to completed")
-            # Note: We don't stop mount tracking here - that only happens when stop_session() is called
+                elif self.session_config['status'] == 'error':
+                    logger.info("Session status is error, not changing to completed")
+                # Stop mount tracking if it was started by the session and session completed naturally
+                if (self.session_config.get('enable_tracking', False) and 
+                    self.mount.tracking and 
+                    self.session_config['status'] == 'completed' and not self.session_config.get('mount_tracking_stopped', False)):
+                    try:
+                        self.mount.stop_tracking()
+                        self.session_config['mount_tracking_stopped'] = True
+                        logger.info("Mount tracking stopped (natural completion)")
+                    except Exception as e:
+                        logger.warning(f"Failed to stop mount tracking: {e}")
             logger.info("Session worker finished")
     
     def _capture_session_image(self) -> bool:
@@ -252,6 +267,7 @@ class SessionController:
         # Capture image using camera
         if hasattr(self.camera, 'capture_file'):
             self.camera.capture_file(filename)
+            return True
         elif hasattr(self.camera, 'capture_still'):
             # For cameras that use capture_still, we need to handle the filename differently
             success = self.camera.capture_still()
@@ -265,12 +281,12 @@ class SessionController:
                     os.rename(latest_file, filename)
                     return True
                 return False
-            return False
+            else:
+                # If capture_still returns False, it means capture failed
+                raise Exception("Camera capture failed")
         else:
             logger.error("Camera does not support file capture")
             return False
-        
-        return True
     
     def _save_session_metadata(self):
         """Save session metadata to JSON file."""

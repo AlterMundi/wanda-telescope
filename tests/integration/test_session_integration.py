@@ -61,12 +61,12 @@ class TestSessionIntegration:
         # Check session completed
         assert session_controller.session_running is False
         assert session_controller.session_config['images_captured'] == 3
-        assert session_controller.session_config['status'] == 'running'  # Still running until stopped
+        assert session_controller.session_config['status'] == 'completed'  # Completed when worker finishes
         
-        # Manually stop the session
+        # Manually stop the session (should be no-op since already completed)
         session_controller.stop_session()
         
-        # Now check that status is completed
+        # Status should still be completed
         assert session_controller.session_config['status'] == 'completed'
         
         # Check session directory was created
@@ -145,7 +145,14 @@ class TestSessionIntegration:
         """Test session error handling and recovery."""
         # Make camera capture fail by raising an exception
         original_capture_still = mock_camera.capture_still
+        original_capture_file = None
+        
+        # Mock both methods that could be called
         mock_camera.capture_still = Mock(side_effect=Exception("Camera capture failed"))
+        
+        if hasattr(mock_camera, 'capture_file'):
+            original_capture_file = mock_camera.capture_file
+            mock_camera.capture_file = Mock(side_effect=Exception("Camera capture failed"))
         
         # Start session
         session_controller.start_session(
@@ -156,14 +163,19 @@ class TestSessionIntegration:
         # Wait for error to occur and thread to finish
         session_controller.session_thread.join(timeout=5.0)
         
-        # Check session status
+        # Check session status - should be error when camera capture fails
         assert session_controller.session_config['status'] == 'error'
         
-        # Manually stop the session to clean up
+        # Manually stop the session (should be no-op since already completed)
         session_controller.stop_session()
+        
+        # Status should still be error
+        assert session_controller.session_config['status'] == 'error'
         
         # Restore camera functionality
         mock_camera.capture_still = original_capture_still
+        if original_capture_file is not None:
+            mock_camera.capture_file = original_capture_file
         
         # Start new session should work
         success = session_controller.start_session(
@@ -176,7 +188,7 @@ class TestSessionIntegration:
         # Wait for completion
         session_controller.session_thread.join(timeout=5.0)
         session_controller.stop_session()
-    
+        
     def test_session_directory_structure(self, session_controller, temp_capture_dir):
         """Test session creates proper directory structure."""
         # Start session
