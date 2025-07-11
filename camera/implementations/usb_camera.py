@@ -10,6 +10,12 @@ from ..base import AbstractCamera
 from ..exceptions import CameraInitializationError, CameraNotConnectedError
 from typing import Tuple, Optional, Any
 
+# Handle different OpenCV versions for VideoWriter_fourcc
+try:
+    fourcc = cv2.VideoWriter_fourcc
+except AttributeError:
+    fourcc = cv2.FOURCC
+
 logger = logging.getLogger(__name__)
 
 class USBCamera(AbstractCamera):
@@ -43,7 +49,7 @@ class USBCamera(AbstractCamera):
             if not self.camera.isOpened():
                 raise Exception("Failed to open USB camera")
             # Force MJPG format to get higher resolutions
-            self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G'))
+            self.camera.set(cv2.CAP_PROP_FOURCC, fourcc('M','J','P','G'))
             # Force 1280x720 resolution
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -142,10 +148,10 @@ class USBCamera(AbstractCamera):
             raise Exception("Camera not initialized")
         
         config = self.create_video_configuration()
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc_code = fourcc(*'mp4v')
         self.video_writer = cv2.VideoWriter(
             filename,
-            fourcc,
+            fourcc_code,
             config['fps'],
             (config['width'], config['height'])
         )
@@ -214,7 +220,7 @@ class USBCamera(AbstractCamera):
             raise CameraNotConnectedError("Camera not initialized")
         try:
             # Implementation will go here
-            pass
+            return False, None
         except Exception as e:
             return False, None
     
