@@ -110,6 +110,49 @@ const CameraControls = {
     },
     
     /**
+     * Update ISO display based on slider value
+     * @param {number} sliderValue - Value from the ISO slider (0-1000)
+     */
+    updateISO: function(sliderValue) {
+        const minISO = 20;
+        const maxISO = 1600;
+        const isoValue = Math.round(minISO + (maxISO - minISO) * sliderValue / 1000);
+        
+        // Check if we're near milestone values for snapping
+        const milestones = [20, 800, 1600];
+        const snapThreshold = 50; // Range around milestone values for snapping
+        
+        let displayValue = isoValue;
+        let isSnapped = false;
+        
+        for (const milestone of milestones) {
+            if (Math.abs(isoValue - milestone) <= snapThreshold) {
+                displayValue = milestone;
+                isSnapped = true;
+                break;
+            }
+        }
+        
+        // Format display based on whether we're snapped to a milestone
+        let display;
+        if (isSnapped) {
+            const labels = {20: 'Low (20)', 800: 'Medium (800)', 1600: 'High (1600)'};
+            display = labels[displayValue];
+        } else {
+            display = `${displayValue}`;
+        }
+        
+        document.getElementById('iso_display').value = display;
+        
+        // Update the slider value if snapped (for visual feedback)
+        if (isSnapped) {
+            const slider = document.querySelector('input[name="iso"]');
+            const snappedSliderValue = Math.round(1000 * (displayValue - minISO) / (maxISO - minISO));
+            slider.value = snappedSliderValue;
+        }
+    },
+    
+    /**
      * Toggle digital gain controls
      * @param {HTMLElement} checkbox - The digital gain checkbox
      */

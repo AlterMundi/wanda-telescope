@@ -97,7 +97,18 @@ class WandaApp:
             # Convert slider value to exposure time in seconds, then to microseconds
             exposure_seconds = self._slider_to_seconds(slider_value)
             self.camera.exposure_us = int(exposure_seconds * 1000000)
-            self.camera.gain = self.camera.iso_to_gain(iso)
+            
+            # Convert ISO slider value (0-1000) to actual ISO value, with validation
+            min_iso = 20
+            max_iso = 1600
+            try:
+                iso_slider_value = int(iso)
+                # Convert slider value to ISO value
+                actual_iso = min_iso + (max_iso - min_iso) * iso_slider_value / 1000
+                actual_iso = max(min_iso, min(max_iso, actual_iso))  # Clamp to range
+            except (ValueError, TypeError):
+                actual_iso = 800  # Default to Medium
+            self.camera.gain = self.camera.iso_to_gain(actual_iso)
         
         # Digital gain settings
         self.camera.use_digital_gain = 'use_digital_gain' in request.form
@@ -130,7 +141,10 @@ class WandaApp:
         # Convert exposure time to seconds for display
         exposure_seconds = self.camera.get_exposure_seconds()
         current_exposure = self._format_exposure_display(exposure_seconds)
+        
+        # Convert current ISO to slider value and label
         current_iso = self.camera.gain_to_iso(self.camera.gain)
+        iso_slider_value, current_iso_label = self._iso_to_slider_and_label(current_iso)
         
         # Calculate slider value from exposure time in seconds
         min_seconds = 0.1
@@ -149,7 +163,8 @@ class WandaApp:
         
         return {
             'current_exposure': current_exposure,
-            'current_iso': current_iso,
+            'iso_slider_value': iso_slider_value,
+            'current_iso_label': current_iso_label,
             'slider_value': slider_value,
             'exposure_seconds': exposure_seconds,
             'use_digital_gain': self.camera.use_digital_gain,
@@ -182,6 +197,27 @@ class WandaApp:
         max_seconds = 300
         log_range = math.log(max_seconds / min_seconds)
         return min_seconds * math.exp(slider_value * log_range / 1000)
+    
+    def _iso_to_slider_and_label(self, iso_value):
+        """Convert ISO value to slider position and display label."""
+        min_iso = 20
+        max_iso = 1600
+        
+        # Convert ISO value to slider position (0-1000)
+        slider_value = int(1000 * (iso_value - min_iso) / (max_iso - min_iso))
+        slider_value = max(0, min(1000, slider_value))  # Clamp to range
+        
+        # Check if we're near milestone values for display
+        milestones = [20, 800, 1600]
+        milestone_labels = {20: 'Low (20)', 800: 'Medium (800)', 1600: 'High (1600)'}
+        
+        # Find if we're close to a milestone
+        for milestone in milestones:
+            if abs(iso_value - milestone) <= 50:  # Same threshold as frontend
+                return slider_value, milestone_labels[milestone]
+        
+        # If not near a milestone, show the actual value
+        return slider_value, str(int(iso_value))
     
     def video_feed(self):
         """Stream video feed from the camera."""

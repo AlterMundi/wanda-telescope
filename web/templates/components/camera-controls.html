@@ -22,10 +22,11 @@
             </button>
         </div>
         <p>
-            ISO (20-1600): 
-            <input type="range" name="iso" min="20" max="1600" step="10" value="{{ current_iso }}"
-                oninput="this.nextElementSibling.value = this.value">
-            <output>{{ current_iso }}</output>
+            ISO Sensitivity: 
+            <input type="range" name="iso" min="0" max="1000" step="1" value="{{ iso_slider_value }}"
+                oninput="CameraControls.updateISO(this.value)" 
+                title="Higher sensitivity brightens images but adds noise (common in astrophotography)">
+            <output id="iso_display">{{ current_iso_label }}</output>
         </p>
         <div class="toggle-container">
             <label class="toggle-option">

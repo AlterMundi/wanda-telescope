@@ -99,13 +99,73 @@ class TestExposureControls:
         # Simulate form data with new exposure slider value
         with self.app.app.test_request_context('/', method='POST', data={
             'exposure': '500',  # Middle of the range
-            'iso': '100'
+            'iso': '500'  # Middle of ISO range (should be around 810)
         }):
             self.app._handle_post_request()
             
             # Check that exposure was updated (should be around 5.5 seconds)
             exposure_seconds = self.camera.get_exposure_seconds()
             assert 5 < exposure_seconds < 6
+            
+            # Check that ISO was updated (should be around 810)
+            current_iso = self.camera.gain_to_iso(self.camera.gain)
+            assert 800 < current_iso < 820  # Allow for small rounding differences
+    
+    def test_iso_slider_range_conversion(self):
+        """Test ISO slider value conversion to actual ISO values."""
+        # Test minimum value (0 -> 20)
+        slider_value = 0
+        min_iso = 20
+        max_iso = 1600
+        expected_iso = min_iso + (max_iso - min_iso) * slider_value / 1000
+        assert expected_iso == 20
+        
+        # Test maximum value (1000 -> 1600)
+        slider_value = 1000
+        expected_iso = min_iso + (max_iso - min_iso) * slider_value / 1000
+        assert expected_iso == 1600
+        
+        # Test middle value (500 -> 810)
+        slider_value = 500
+        expected_iso = min_iso + (max_iso - min_iso) * slider_value / 1000
+        assert expected_iso == 810
+    
+    def test_iso_to_slider_and_label_milestone_values(self):
+        """Test ISO to slider conversion for milestone values."""
+        # Test Low milestone (20)
+        slider_value, label = self.app._iso_to_slider_and_label(20)
+        assert slider_value == 0
+        assert label == "Low (20)"
+        
+        # Test Medium milestone (800)
+        slider_value, label = self.app._iso_to_slider_and_label(800)
+        # Calculate expected: 1000 * (800-20)/(1600-20) = 1000 * 780/1580 ≈ 493
+        expected_slider = int(1000 * (800 - 20) / (1600 - 20))
+        assert slider_value == expected_slider
+        assert label == "Medium (800)"
+        
+        # Test High milestone (1600)
+        slider_value, label = self.app._iso_to_slider_and_label(1600)
+        assert slider_value == 1000
+        assert label == "High (1600)"
+    
+    def test_iso_to_slider_and_label_intermediate_values(self):
+        """Test ISO to slider conversion for intermediate values."""
+        # Test value near Low milestone
+        slider_value, label = self.app._iso_to_slider_and_label(70)  # Within 50 of 20
+        assert label == "Low (20)"
+        
+        # Test value near Medium milestone
+        slider_value, label = self.app._iso_to_slider_and_label(850)  # Within 50 of 800
+        assert label == "Medium (800)"
+        
+        # Test value near High milestone
+        slider_value, label = self.app._iso_to_slider_and_label(1550)  # Within 50 of 1600
+        assert label == "High (1600)"
+        
+        # Test intermediate value (not near any milestone)
+        slider_value, label = self.app._iso_to_slider_and_label(400)
+        assert label == "400"  # Should show actual value
 
 
 class TestExposureTemplateRendering:
