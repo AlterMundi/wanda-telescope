@@ -166,6 +166,55 @@ class TestExposureControls:
         # Test intermediate value (not near any milestone)
         slider_value, label = self.app._iso_to_slider_and_label(400)
         assert label == "400"  # Should show actual value
+    
+    def test_night_vision_mode_handling(self):
+        """Test handling of night vision mode settings."""
+        # Test enabling night vision mode
+        with self.app.app.test_request_context('/', method='POST', data={
+            'night_vision_mode': 'on',
+            'night_vision_intensity': '40.0'
+        }):
+            self.app._handle_post_request()
+            
+            # Check that night vision mode was enabled
+            assert self.camera.night_vision_mode == True
+            assert self.camera.night_vision_intensity == 40.0
+    
+    def test_night_vision_intensity_validation(self):
+        """Test night vision intensity validation."""
+        # Test minimum value
+        with self.app.app.test_request_context('/', method='POST', data={
+            'night_vision_mode': 'on',
+            'night_vision_intensity': '0.5'  # Below minimum
+        }):
+            self.app._handle_post_request()
+            assert self.camera.night_vision_intensity == 1.0  # Should clamp to minimum
+        
+        # Test maximum value
+        with self.app.app.test_request_context('/', method='POST', data={
+            'night_vision_mode': 'on',
+            'night_vision_intensity': '100.0'  # Above maximum
+        }):
+            self.app._handle_post_request()
+            assert self.camera.night_vision_intensity == 80.0  # Should clamp to maximum
+    
+    def test_night_vision_mode_disabled(self):
+        """Test that night vision mode can be disabled."""
+        # First enable it
+        self.camera.night_vision_mode = True
+        self.camera.night_vision_intensity = 40.0
+        
+        # Then disable it
+        with self.app.app.test_request_context('/', method='POST', data={
+            # No night_vision_mode in form data
+            'night_vision_intensity': '50.0'
+        }):
+            self.app._handle_post_request()
+            
+            # Check that night vision mode was disabled
+            assert self.camera.night_vision_mode == False
+            # Intensity should still be updated
+            assert self.camera.night_vision_intensity == 50.0
 
 
 class TestExposureTemplateRendering:
@@ -207,6 +256,30 @@ class TestExposureTemplateRendering:
         
         # Check for preset button styling
         assert b'class="preset-btn"' in response.data
+    
+    def test_template_has_night_vision_controls(self, client):
+        """Test that the template includes night vision mode controls."""
+        response = client.get("/")
+        assert response.status_code == 200
+        
+        # Check for night vision mode toggle
+        assert b"Night Vision Mode" in response.data
+        assert b'name="night_vision_mode"' in response.data
+        
+        # Check for intensity slider
+        assert b"Intensity (1.0-80.0)" in response.data
+        assert b'name="night_vision_intensity"' in response.data
+        
+        # Check for night vision presets
+        assert b'class="night-vision-presets"' in response.data
+        assert b"Low" in response.data
+        assert b"Medium" in response.data
+        assert b"High" in response.data
+        
+        # Check for tooltips
+        assert b"Low intensity for subtle enhancement" in response.data
+        assert b"Medium intensity for balanced enhancement" in response.data
+        assert b"High intensity for maximum enhancement" in response.data
 
 
 class TestExposureJavaScript:
@@ -258,6 +331,16 @@ class TestExposureJavaScript:
         slider_value = int(1000 * math.log(300 / min_seconds) / log_range)
         expected_seconds = min_seconds * math.exp(slider_value * log_range / 1000)
         assert abs(expected_seconds - 300) < 1
+    
+    def test_javascript_has_night_vision_functions(self, client):
+        """Test that JavaScript includes night vision functions."""
+        response = client.get("/")
+        assert response.status_code == 200
+        
+        # Check for JavaScript functions
+        assert b"toggleNightVision" in response.data
+        assert b"updateNightVisionIntensity" in response.data
+        assert b"setNightVisionIntensity" in response.data
 
 
 class TestExposureCSS:

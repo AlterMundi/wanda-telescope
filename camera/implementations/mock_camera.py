@@ -21,8 +21,10 @@ class MockCamera(AbstractCamera):
         # Add camera settings attributes needed by web app
         self.exposure_us = 100000  # Default exposure time in microseconds
         self.gain = 1.0  # Default gain value
-        self.use_digital_gain = False  # Whether to use digital gain
-        self.digital_gain = 1.0  # Digital gain value
+        self.use_digital_gain = False  # Whether to use digital gain (legacy)
+        self.digital_gain = 1.0  # Digital gain value (legacy)
+        self.night_vision_mode = False  # Whether to use night vision mode
+        self.night_vision_intensity = 1.0  # Night vision intensity value
         self.save_raw = False  # Whether to save raw images
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status
@@ -166,6 +168,13 @@ class MockCamera(AbstractCamera):
         """Capture a still image."""
         try:
             self.capture_status = "Capturing..."
+            
+            # Simulate exposure time delay
+            exposure_seconds = self.get_exposure_seconds()
+            if exposure_seconds > 0.1:  # Only simulate delay for exposures > 0.1s
+                logger.info(f"Mock camera: Simulating {exposure_seconds}s exposure delay")
+                time.sleep(exposure_seconds)
+            
             frame = self.capture_array()
             
             # Apply digital gain if enabled
@@ -186,9 +195,21 @@ class MockCamera(AbstractCamera):
     def update_camera_settings(self):
         """Update camera settings based on current attributes."""
         logger.debug("Mock camera: update_camera_settings()")
+        
+        # Handle night vision mode (combines digital gain functionality)
+        if hasattr(self, 'night_vision_mode') and self.night_vision_mode:
+            # Enable digital gain with night vision intensity
+            self.use_digital_gain = True
+            self.digital_gain = self.night_vision_intensity
+            logger.info(f"Mock camera: Enabled night vision mode with intensity {self.night_vision_intensity}")
+        else:
+            # Disable digital gain if night vision is off
+            self.use_digital_gain = False
+            self.digital_gain = 1.0
+            logger.info("Mock camera: Disabled night vision mode")
+        
         # In mock camera, settings are applied immediately
         # This method exists for interface compatibility
-        pass
     
     def start_video(self):
         """Start video recording."""

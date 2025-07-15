@@ -12,8 +12,10 @@ class AbstractCamera(ABC):
         # Common attributes that app.py expects
         self.exposure_us = 100000  # Default exposure time in microseconds
         self.gain = 1.0  # Default gain value
-        self.use_digital_gain = False  # Whether to use digital gain
-        self.digital_gain = 1.0  # Digital gain value
+        self.use_digital_gain = False  # Whether to use digital gain (legacy)
+        self.digital_gain = 1.0  # Digital gain value (legacy)
+        self.night_vision_mode = False  # Whether to use night vision mode
+        self.night_vision_intensity = 1.0  # Night vision intensity value
         self.save_raw = False  # Whether to save raw images
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status

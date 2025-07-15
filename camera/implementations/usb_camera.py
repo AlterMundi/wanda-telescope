@@ -28,8 +28,8 @@ class USBCamera(AbstractCamera):
         self.is_recording = False
         self.video_writer = None
         self.status = "USB camera initialized"
-        self.exposure_us = 100000  # Default exposure time in microseconds
-        self.gain = 1.0  # Default gain value
+        self.exposure_us = 50000  # Default exposure time in microseconds (0.05s)
+        self.gain = 4.0  # Default gain value (higher for better visibility)
         self.exposure_mode = "manual"  # Default exposure mode
         self.skip_frames = 0  # Number of frames to skip for performance
         self.performance_mode = "normal"  # Performance mode: normal, fast, fastest
@@ -53,6 +53,14 @@ class USBCamera(AbstractCamera):
             # Force 1280x720 resolution
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            
+            # Set initial brightness for better visibility
+            try:
+                self.camera.set(cv2.CAP_PROP_BRIGHTNESS, 150)  # Higher brightness for better visibility
+                logger.info("Set initial brightness to 150")
+            except Exception as e:
+                logger.warning(f"Could not set initial brightness: {e}")
+            
             self.status = "USB camera ready"
         except Exception as e:
             self.status = f"USB camera error: {str(e)}"
@@ -345,17 +353,72 @@ class USBCamera(AbstractCamera):
         if not self.camera:
             raise Exception("Camera not initialized")
         
-        # Update exposure
-        self.camera.set(cv2.CAP_PROP_EXPOSURE, self.exposure_us / 1000)
+        # Try multiple approaches for exposure control
+        exposure_set = False
         
-        # Update gain
-        self.camera.set(cv2.CAP_PROP_GAIN, self.gain)
+        # Approach 1: Try manual exposure mode
+        try:
+            self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)  # 1 = manual mode
+            exposure_ms = self.exposure_us / 1000
+            self.camera.set(cv2.CAP_PROP_EXPOSURE, exposure_ms)
+            logger.info(f"Set manual exposure to {exposure_ms}ms ({self.exposure_us}us)")
+            exposure_set = True
+        except Exception as e:
+            logger.warning(f"Manual exposure failed: {e}")
         
-        # Apply digital gain if enabled
-        if self.use_digital_gain:
-            # Note: OpenCV doesn't have direct digital gain control
-            # This would need to be applied during frame processing
-            pass
+        # Approach 2: If manual fails, try auto-exposure with brightness control
+        if not exposure_set:
+            try:
+                self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)  # 0 = auto mode
+                # Use brightness to control exposure indirectly
+                brightness = min(255, max(0, int(self.gain * 50)))  # Scale gain to brightness
+                self.camera.set(cv2.CAP_PROP_BRIGHTNESS, brightness)
+                logger.info(f"Set auto-exposure with brightness {brightness}")
+                exposure_set = True
+            except Exception as e:
+                logger.warning(f"Auto-exposure with brightness failed: {e}")
+        
+        # Update gain - try multiple approaches
+        gain_set = False
+        
+        # Approach 1: Try direct gain setting
+        try:
+            self.camera.set(cv2.CAP_PROP_GAIN, self.gain)
+            logger.info(f"Set gain to {self.gain}")
+            gain_set = True
+        except Exception as e:
+            logger.warning(f"Direct gain setting failed: {e}")
+        
+        # Approach 2: If direct gain fails, use brightness as proxy
+        if not gain_set:
+            try:
+                brightness = min(255, max(0, int(self.gain * 50)))
+                self.camera.set(cv2.CAP_PROP_BRIGHTNESS, brightness)
+                logger.info(f"Set brightness to {brightness} (proxy for gain {self.gain})")
+                gain_set = True
+            except Exception as e:
+                logger.warning(f"Brightness setting failed: {e}")
+        
+        # Handle night vision mode (combines digital gain functionality)
+        if hasattr(self, 'night_vision_mode') and self.night_vision_mode:
+            # Enable digital gain with night vision intensity
+            self.use_digital_gain = True
+            self.digital_gain = self.night_vision_intensity
+            logger.info(f"Enabled night vision mode with intensity {self.night_vision_intensity}")
+        else:
+            # Disable digital gain if night vision is off
+            self.use_digital_gain = False
+            self.digital_gain = 1.0
+            logger.info("Disabled night vision mode")
+        
+        # Verify settings were applied (for debugging)
+        try:
+            actual_exposure = self.camera.get(cv2.CAP_PROP_EXPOSURE)
+            actual_gain = self.camera.get(cv2.CAP_PROP_GAIN)
+            actual_brightness = self.camera.get(cv2.CAP_PROP_BRIGHTNESS)
+            logger.info(f"Actual camera settings - exposure: {actual_exposure}ms, gain: {actual_gain}, brightness: {actual_brightness}")
+        except Exception as e:
+            logger.warning(f"Could not read back camera settings: {e}")
     
     def get_frame(self):
         """Get a frame as JPEG data.

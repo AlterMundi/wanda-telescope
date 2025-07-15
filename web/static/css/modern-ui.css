@@ -204,6 +204,14 @@ main {
     gap: 8px;
 }
 
+/* Night vision presets */
+.night-vision-presets {
+    margin: 15px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .preset-btn {
     background-color: #2a2a2a;
     color: #00b7eb;

@@ -153,25 +153,53 @@ const CameraControls = {
     },
     
     /**
-     * Toggle digital gain controls
-     * @param {HTMLElement} checkbox - The digital gain checkbox
+     * Toggle night vision mode controls
+     * @param {HTMLElement} checkbox - The night vision mode checkbox
      */
-    toggleDigitalGain: function(checkbox) {
-        const slider = document.querySelector('input[name="digital_gain"]');
-        const container = document.getElementById('digital-gain-container');
+    toggleNightVision: function(checkbox) {
+        const slider = document.querySelector('input[name="night_vision_intensity"]');
+        const container = document.getElementById('night-vision-container');
+        const presets = document.querySelector('.night-vision-presets');
         
         slider.disabled = !checkbox.checked;
         container.style.opacity = checkbox.checked ? '1.0' : '0.5';
+        if (presets) {
+            presets.style.opacity = checkbox.checked ? '1.0' : '0.5';
+        }
+    },
+    
+    /**
+     * Update night vision intensity display
+     * @param {number} intensity - Intensity value from slider
+     */
+    updateNightVisionIntensity: function(intensity) {
+        document.getElementById('night_vision_intensity_display').value = intensity;
+    },
+    
+    /**
+     * Set night vision intensity to a preset value
+     * @param {number} intensity - Intensity value
+     */
+    setNightVisionIntensity: function(intensity) {
+        const slider = document.querySelector('input[name="night_vision_intensity"]');
+        slider.value = intensity;
+        this.updateNightVisionIntensity(intensity);
+        
+        // Trigger form submission to apply the setting
+        const form = slider.closest('form');
+        if (form) {
+            form.submit();
+        }
     }
 };
 
 // Initialize controls when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    // Set up event handler for digital gain checkbox
-    const checkbox = document.querySelector('input[name="use_digital_gain"]');
+    // Set up event handler for night vision mode checkbox
+    const checkbox = document.querySelector('input[name="night_vision_mode"]');
     if (checkbox) {
         checkbox.addEventListener('change', function() {
-            CameraControls.toggleDigitalGain(this);
+            CameraControls.toggleNightVision(this);
         });
     }
     

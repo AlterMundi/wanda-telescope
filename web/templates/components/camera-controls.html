@@ -30,18 +30,33 @@
         </p>
         <div class="toggle-container">
             <label class="toggle-option">
-                <input type="checkbox" name="use_digital_gain" {{ 'checked' if use_digital_gain else '' }}
-                       onchange="CameraControls.toggleDigitalGain(this)">
-                <span style="margin-left: 8px;">Digital Gain (Night Sky Boost)</span>
+                <input type="checkbox" name="night_vision_mode" {{ 'checked' if night_vision_mode else '' }}
+                       onchange="CameraControls.toggleNightVision(this)">
+                <span style="margin-left: 8px;">Night Vision Mode</span>
             </label>
-            <span class="toggle-status">{{ ' (Enabled)' if use_digital_gain else ' (Disabled)' }}</span>
+            <span class="toggle-status">{{ ' (Enabled)' if night_vision_mode else ' (Disabled)' }}</span>
         </div>
-        <p id="digital-gain-container" {{ 'style="opacity: 1.0;"' if use_digital_gain else 'style="opacity: 0.5;"' }}>
-            Digital Gain Level (1.0-80.0): 
-            <input type="range" name="digital_gain" min="1.0" max="80.0" step="0.1" value="{{ digital_gain }}"
-                oninput="this.nextElementSibling.value = this.value" {{ '' if use_digital_gain else 'disabled' }}>
-            <output>{{ digital_gain }}</output>
+        <p id="night-vision-container" {{ 'style="opacity: 1.0;"' if night_vision_mode else 'style="opacity: 0.5;"' }}
+           title="Enhances faint celestial details by combining digital gain and night sky boost">
+            Intensity (1.0-80.0): 
+            <input type="range" name="night_vision_intensity" min="1.0" max="80.0" step="0.1" value="{{ night_vision_intensity }}"
+                oninput="CameraControls.updateNightVisionIntensity(this.value)" {{ '' if night_vision_mode else 'disabled' }}>
+            <output id="night_vision_intensity_display">{{ night_vision_intensity }}</output>
         </p>
+        <div class="night-vision-presets">
+            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(10)" 
+                    title="Low intensity for subtle enhancement">
+                Low
+            </button>
+            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(40)" 
+                    title="Medium intensity for balanced enhancement">
+                Medium
+            </button>
+            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(80)" 
+                    title="High intensity for maximum enhancement">
+                High
+            </button>
+        </div>
         <div class="toggle-container">
             <label class="toggle-option">
                 <input type="checkbox" name="save_raw" {{ 'checked' if save_raw else '' }}>

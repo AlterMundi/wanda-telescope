@@ -110,12 +110,12 @@ class WandaApp:
                 actual_iso = 800  # Default to Medium
             self.camera.gain = self.camera.iso_to_gain(actual_iso)
         
-        # Digital gain settings
-        self.camera.use_digital_gain = 'use_digital_gain' in request.form
+        # Night vision mode settings
+        self.camera.night_vision_mode = 'night_vision_mode' in request.form
         
-        digital_gain_value = request.form.get('digital_gain', type=float)
-        if digital_gain_value is not None:
-            self.camera.digital_gain = max(1.0, min(digital_gain_value, 80.0))
+        night_vision_intensity = request.form.get('night_vision_intensity', type=float)
+        if night_vision_intensity is not None:
+            self.camera.night_vision_intensity = max(1.0, min(night_vision_intensity, 80.0))
         
         # RAW toggle
         self.camera.save_raw = 'save_raw' in request.form
@@ -167,8 +167,8 @@ class WandaApp:
             'current_iso_label': current_iso_label,
             'slider_value': slider_value,
             'exposure_seconds': exposure_seconds,
-            'use_digital_gain': self.camera.use_digital_gain,
-            'digital_gain': self.camera.digital_gain,
+            'night_vision_mode': self.camera.night_vision_mode,
+            'night_vision_intensity': self.camera.night_vision_intensity,
             'save_raw': self.camera.save_raw,
             'skip_frames': self.camera.skip_frames,
             'performance_text': performance_text,
