@@ -133,8 +133,8 @@ class WandaApp:
         current_iso = self.camera.gain_to_iso(self.camera.gain)
         
         # Calculate slider value from exposure time in seconds
-        min_seconds = 0.0001
-        max_seconds = 200
+        min_seconds = 0.1
+        max_seconds = 300
         slider_max = 1000
         log_range = math.log(max_seconds / min_seconds)
         slider_value = int(1000 * math.log(exposure_seconds / min_seconds) / log_range)
@@ -169,17 +169,17 @@ class WandaApp:
     def _format_exposure_display(self, seconds):
         """Format exposure time in seconds for display."""
         if seconds < 1:
-            return f"{seconds:.4f}s"
+            return f"{seconds:.1f}s"
         elif seconds < 10:
-            return f"{seconds:.2f}s"
+            return f"{seconds:.1f}s"
         else:
             return f"{int(seconds)}s"
     
     def _slider_to_seconds(self, slider_value):
         """Convert slider value (0-1000) to exposure time in seconds."""
         import math
-        min_seconds = 0.0001
-        max_seconds = 200
+        min_seconds = 0.1
+        max_seconds = 300
         log_range = math.log(max_seconds / min_seconds)
         return min_seconds * math.exp(slider_value * log_range / 1000)
     

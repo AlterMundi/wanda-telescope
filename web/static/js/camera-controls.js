@@ -7,21 +7,45 @@ const CameraControls = {
      * @param {number} sliderValue - Value from the exposure slider (0-1000)
      */
     updateExposure: function(sliderValue) {
-        const minSeconds = 0.0001;
-        const maxSeconds = 200;
+        const minSeconds = 0.1;
+        const maxSeconds = 300;
         const seconds = minSeconds * Math.pow(maxSeconds / minSeconds, sliderValue / 1000);
         
         // Format the display: show as decimal for < 1s, otherwise as whole seconds
         let display;
         if (seconds < 1) {
-            display = seconds.toFixed(4) + 's';
+            display = seconds.toFixed(1) + 's';
         } else if (seconds < 10) {
-            display = seconds.toFixed(2) + 's';
+            display = seconds.toFixed(1) + 's';
         } else {
             display = Math.round(seconds) + 's';
         }
         
         document.getElementById('exposure_display').value = display;
+    },
+    
+    /**
+     * Set exposure time to a preset value
+     * @param {number} seconds - Exposure time in seconds
+     */
+    setPreset: function(seconds) {
+        const minSeconds = 0.1;
+        const maxSeconds = 300;
+        const logRange = Math.log(maxSeconds / minSeconds);
+        const sliderValue = Math.round(1000 * Math.log(seconds / minSeconds) / logRange);
+        
+        // Update the slider
+        const slider = document.querySelector('input[name="exposure"]');
+        slider.value = sliderValue;
+        
+        // Update the display
+        this.updateExposure(sliderValue);
+        
+        // Trigger form submission to apply the setting
+        const form = slider.closest('form');
+        if (form) {
+            form.submit();
+        }
     },
     
     /**

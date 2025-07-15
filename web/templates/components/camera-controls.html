@@ -2,11 +2,25 @@
     <h2>Camera Controls</h2>
     <form method="post">
         <p>
-            Exposure Time in Seconds (0.0001s - 200s): 
+            Exposure Time in Seconds (0.1s - 300s): 
             <input type="range" name="exposure" min="0" max="1000" step="1" value="{{ slider_value }}"
                 oninput="CameraControls.updateExposure(this.value)">
             <output id="exposure_display">{{ current_exposure }}</output>
         </p>
+        <div class="exposure-presets">
+            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(0.5)" 
+                    title="Bright Objects: For the Moon or planets">
+                Bright Objects (0.5s)
+            </button>
+            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(30)" 
+                    title="Deep Sky: For nebulae and galaxies">
+                Deep Sky (30s)
+            </button>
+            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(300)" 
+                    title="Long Exposure: For faint deep-sky objects">
+                Long Exposure (300s)
+            </button>
+        </div>
         <p>
             ISO (20-1600): 
             <input type="range" name="iso" min="20" max="1600" step="10" value="{{ current_iso }}"

@@ -196,6 +196,37 @@ main {
     margin-top: 0;
 }
 
+/* Exposure presets */
+.exposure-presets {
+    margin: 15px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preset-btn {
+    background-color: #2a2a2a;
+    color: #00b7eb;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.preset-btn:hover {
+    background-color: #3a3a3a;
+    border-color: #00b7eb;
+    color: #fff;
+}
+
+.preset-btn:active {
+    background-color: #1a1a1a;
+    transform: translateY(1px);
+}
+
 /* Compact form elements */
 .panel-content p {
     margin: 10px 0;
