@@ -2,10 +2,10 @@
     <h2>Camera Controls</h2>
     <form method="post">
         <p>
-            Shutter Speed (1/10000s - 200s): 
+            Exposure Time in Seconds (0.0001s - 200s): 
             <input type="range" name="exposure" min="0" max="1000" step="1" value="{{ slider_value }}"
-                oninput="CameraControls.updateShutter(this.value)">
-            <output id="shutter_display">{{ current_shutter }}</output>
+                oninput="CameraControls.updateExposure(this.value)">
+            <output id="exposure_display">{{ current_exposure }}</output>
         </p>
         <p>
             ISO (20-1600): 

@@ -9,7 +9,7 @@ const ModernUI = {
         // Set up menu tab click handlers for new layout
         this.setupMenuTabs();
     },
-
+    
     /**
      * Set up the menu tab click handlers for the new always-visible menu
      */

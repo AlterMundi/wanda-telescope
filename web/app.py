@@ -94,7 +94,9 @@ class WandaApp:
         iso = request.form.get('iso', type=int)
         
         if slider_value is not None and iso is not None:
-            self.camera.exposure_us = self.camera.slider_to_us(slider_value)
+            # Convert slider value to exposure time in seconds, then to microseconds
+            exposure_seconds = self._slider_to_seconds(slider_value)
+            self.camera.exposure_us = int(exposure_seconds * 1000000)
             self.camera.gain = self.camera.iso_to_gain(iso)
         
         # Digital gain settings
@@ -125,15 +127,17 @@ class WandaApp:
     
     def _prepare_template_vars(self):
         """Prepare template variables for the index page."""
-        current_shutter = self.camera.us_to_shutter_string(self.camera.exposure_us)
+        # Convert exposure time to seconds for display
+        exposure_seconds = self.camera.get_exposure_seconds()
+        current_exposure = self._format_exposure_display(exposure_seconds)
         current_iso = self.camera.gain_to_iso(self.camera.gain)
         
-        # Calculate slider value from exposure time
-        min_us = 100
-        max_us = 200_000_000
+        # Calculate slider value from exposure time in seconds
+        min_seconds = 0.0001
+        max_seconds = 200
         slider_max = 1000
-        log_range = math.log(max_us / min_us)
-        slider_value = int(1000 * math.log(self.camera.exposure_us / min_us) / log_range)
+        log_range = math.log(max_seconds / min_seconds)
+        slider_value = int(1000 * math.log(exposure_seconds / min_seconds) / log_range)
         slider_value = max(0, min(slider_value, slider_max))
         
         # Get current exposure time in seconds for the countdown
@@ -144,7 +148,7 @@ class WandaApp:
         performance_text = performance_labels[min(self.camera.skip_frames, len(performance_labels) - 1)]
         
         return {
-            'current_shutter': current_shutter,
+            'current_exposure': current_exposure,
             'current_iso': current_iso,
             'slider_value': slider_value,
             'exposure_seconds': exposure_seconds,
@@ -161,6 +165,23 @@ class WandaApp:
             'mount_direction': self.mount.direction,
             'mount_speed': self.mount.speed
         }
+    
+    def _format_exposure_display(self, seconds):
+        """Format exposure time in seconds for display."""
+        if seconds < 1:
+            return f"{seconds:.4f}s"
+        elif seconds < 10:
+            return f"{seconds:.2f}s"
+        else:
+            return f"{int(seconds)}s"
+    
+    def _slider_to_seconds(self, slider_value):
+        """Convert slider value (0-1000) to exposure time in seconds."""
+        import math
+        min_seconds = 0.0001
+        max_seconds = 200
+        log_range = math.log(max_seconds / min_seconds)
+        return min_seconds * math.exp(slider_value * log_range / 1000)
     
     def video_feed(self):
         """Stream video feed from the camera."""

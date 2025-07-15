@@ -3,19 +3,25 @@
  */
 const CameraControls = {
     /**
-     * Update shutter speed display based on slider value
+     * Update exposure time display based on slider value
      * @param {number} sliderValue - Value from the exposure slider (0-1000)
      */
-    updateShutter: function(sliderValue) {
-        const minUs = 100;
-        const maxUs = 200000000;
-        const us = minUs * Math.pow(maxUs / minUs, sliderValue / 1000);
-        const seconds = us / 1000000;
-        const display = seconds < 1 ? 
-            '1/' + Math.round(1/seconds) + 's' : 
-            Math.round(seconds) + 's';
+    updateExposure: function(sliderValue) {
+        const minSeconds = 0.0001;
+        const maxSeconds = 200;
+        const seconds = minSeconds * Math.pow(maxSeconds / minSeconds, sliderValue / 1000);
         
-        document.getElementById('shutter_display').value = display;
+        // Format the display: show as decimal for < 1s, otherwise as whole seconds
+        let display;
+        if (seconds < 1) {
+            display = seconds.toFixed(4) + 's';
+        } else if (seconds < 10) {
+            display = seconds.toFixed(2) + 's';
+        } else {
+            display = Math.round(seconds) + 's';
+        }
+        
+        document.getElementById('exposure_display').value = display;
     },
     
     /**
