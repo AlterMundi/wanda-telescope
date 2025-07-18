@@ -113,7 +113,7 @@ class TestSignalHandler:
             
             mock_print.assert_has_calls([
                 call("Received termination signal, shutting down..."),
-                call("Camera stopped and cleaned up")
+                call("Camera restored to original state and cleaned up")
             ])
             mock_camera.stop.assert_called_once()
             mock_camera.cleanup.assert_called_once()

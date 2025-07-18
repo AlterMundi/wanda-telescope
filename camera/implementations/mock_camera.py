@@ -33,6 +33,16 @@ class MockCamera(AbstractCamera):
         self.exposure_mode = "manual"  # Exposure mode
         logger.info("Mock camera initialized")
     
+    def save_original_state(self):
+        """Save the current camera state as the original state to restore on exit."""
+        super().save_original_state()
+        logger.info("Saved original mock camera state")
+    
+    def restore_original_state(self):
+        """Restore the camera to its original state."""
+        super().restore_original_state()
+        logger.info("Restored original mock camera state")
+    
     def _init_webcam(self):
         """Try to initialize webcam if available."""
         try:

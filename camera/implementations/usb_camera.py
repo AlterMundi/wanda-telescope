@@ -11,10 +11,7 @@ from ..exceptions import CameraInitializationError, CameraNotConnectedError
 from typing import Tuple, Optional, Any
 
 # Handle different OpenCV versions for VideoWriter_fourcc
-try:
-    fourcc = cv2.VideoWriter_fourcc
-except AttributeError:
-    fourcc = cv2.FOURCC
+fourcc = getattr(cv2, 'VideoWriter_fourcc', lambda *args: 0x7634706d)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +36,46 @@ class USBCamera(AbstractCamera):
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status
         self.capture_dir = capture_dir if capture_dir else "captures"  # Directory for saved images
+        
+        # Hardware-specific state for restoration
+        self._original_hardware_state = None
+        
         logger.info("USB camera instance created")
+    
+    def save_original_state(self):
+        """Save the current camera state as the original state to restore on exit."""
+        super().save_original_state()
+        
+        # Save hardware-specific state
+        if self.camera and self.camera.isOpened():
+            try:
+                self._original_hardware_state = {
+                    'brightness': self.camera.get(cv2.CAP_PROP_BRIGHTNESS),
+                    'exposure_mode': self.camera.get(cv2.CAP_PROP_AUTO_EXPOSURE),
+                    'gain': self.camera.get(cv2.CAP_PROP_GAIN),
+                    'exposure': self.camera.get(cv2.CAP_PROP_EXPOSURE)
+                }
+                logger.info("Saved original USB camera hardware state")
+            except Exception as e:
+                logger.warning(f"Could not save original hardware state: {e}")
+                self._original_hardware_state = None
+    
+    def restore_original_state(self):
+        """Restore the camera to its original state."""
+        super().restore_original_state()
+        
+        # Restore hardware-specific state
+        if self.camera and self.camera.isOpened() and self._original_hardware_state:
+            try:
+                # Restore hardware settings
+                self.camera.set(cv2.CAP_PROP_BRIGHTNESS, self._original_hardware_state['brightness'])
+                self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, self._original_hardware_state['exposure_mode'])
+                self.camera.set(cv2.CAP_PROP_GAIN, self._original_hardware_state['gain'])
+                self.camera.set(cv2.CAP_PROP_EXPOSURE, self._original_hardware_state['exposure'])
+                
+                logger.info("Restored original USB camera hardware state")
+            except Exception as e:
+                logger.warning(f"Could not restore original hardware state: {e}")
     
     def initialize(self):
         """Initialize the USB camera hardware."""

@@ -42,6 +42,43 @@ class PiCamera(AbstractCamera):
         
         logger.info("Pi camera instance created")
     
+    def save_original_state(self):
+        """Save the current camera state as the original state to restore on exit."""
+        super().save_original_state()
+        
+        # Save hardware-specific state for Pi camera
+        if self.camera:
+            try:
+                # Get current camera controls
+                controls = self.camera.camera_controls
+                self._original_hardware_state = {
+                    'controls': controls.copy() if controls else {},
+                    'exposure_mode': getattr(self, 'exposure_mode', 'manual')
+                }
+                logger.info("Saved original Pi camera hardware state")
+            except Exception as e:
+                logger.warning(f"Could not save original hardware state: {e}")
+                self._original_hardware_state = None
+    
+    def restore_original_state(self):
+        """Restore the camera to its original state."""
+        super().restore_original_state()
+        
+        # Restore hardware-specific state for Pi camera
+        if self.camera and self._original_hardware_state:
+            try:
+                # Restore original controls
+                if 'controls' in self._original_hardware_state:
+                    self.camera.set_controls(self._original_hardware_state['controls'])
+                
+                # Restore exposure mode
+                if 'exposure_mode' in self._original_hardware_state:
+                    self.exposure_mode = self._original_hardware_state['exposure_mode']
+                
+                logger.info("Restored original Pi camera hardware state")
+            except Exception as e:
+                logger.warning(f"Could not restore original hardware state: {e}")
+    
     def _import_picamera2(self):
         """Import picamera2 modules only when needed."""
         try:

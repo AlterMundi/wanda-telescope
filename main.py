@@ -40,6 +40,10 @@ def initialize_camera():
         
         # Start the camera
         camera.start()
+        
+        # Save the original camera state for restoration on exit
+        camera.save_original_state()
+        
         print("Camera initialized successfully")
         return camera
     except Exception as e:
@@ -51,9 +55,11 @@ def signal_handler(sig, frame):
     print("Received termination signal, shutting down...")
     if 'camera' in globals() and camera is not None:
         try:
+            # Restore original camera state before cleanup
+            camera.restore_original_state()
             camera.stop()
             camera.cleanup()
-            print("Camera stopped and cleaned up")
+            print("Camera restored to original state and cleaned up")
         except Exception as e:
             print(f"Error during camera cleanup: {e}")
     sys.exit(0)
@@ -78,6 +84,8 @@ def main():
         print(f"Error running application: {e}")
         if camera is not None:
             try:
+                # Restore original camera state before cleanup
+                camera.restore_original_state()
                 camera.stop()
                 camera.cleanup()
             except:

@@ -21,6 +21,9 @@ class AbstractCamera(ABC):
         self.capture_status = "Ready"  # Current capture status
         self.capture_dir = "captures"  # Directory for saved images
         self.skip_frames = 0  # Performance setting
+        
+        # Original state tracking for restoration
+        self._original_state = None
     
     @abstractmethod
     def initialize(self):
@@ -94,6 +97,34 @@ class AbstractCamera(ABC):
     def capture_still(self):
         """Capture a still image."""
         pass
+    
+    def save_original_state(self):
+        """Save the current camera state as the original state to restore on exit."""
+        self._original_state = {
+            'exposure_us': self.exposure_us,
+            'gain': self.gain,
+            'use_digital_gain': self.use_digital_gain,
+            'digital_gain': self.digital_gain,
+            'night_vision_mode': self.night_vision_mode,
+            'night_vision_intensity': self.night_vision_intensity,
+            'save_raw': self.save_raw,
+            'skip_frames': self.skip_frames
+        }
+    
+    def restore_original_state(self):
+        """Restore the camera to its original state."""
+        if self._original_state is not None:
+            self.exposure_us = self._original_state['exposure_us']
+            self.gain = self._original_state['gain']
+            self.use_digital_gain = self._original_state['use_digital_gain']
+            self.digital_gain = self._original_state['digital_gain']
+            self.night_vision_mode = self._original_state['night_vision_mode']
+            self.night_vision_intensity = self._original_state['night_vision_intensity']
+            self.save_raw = self._original_state['save_raw']
+            self.skip_frames = self._original_state['skip_frames']
+            
+            # Apply the restored settings to the camera hardware
+            self.update_camera_settings()
     
     def us_to_shutter_string(self, us):
         """Convert microseconds to a human-readable shutter speed string."""
