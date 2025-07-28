@@ -259,6 +259,9 @@ class PiCamera(AbstractCamera):
             self.configure(still_config)
             self.camera.start()
             
+            # Reapply camera settings after reconfiguration
+            self.update_camera_settings()
+            
             # Capture the image
             self.camera.capture_file(filename)
             
@@ -268,6 +271,8 @@ class PiCamera(AbstractCamera):
                 preview_config = self.create_preview_configuration()
                 self.configure(preview_config)
                 self.camera.start()
+                # Reapply settings for preview mode too
+                self.update_camera_settings()
                 
             logger.info(f"Successfully captured to {filename}")
         except Exception as e:
@@ -318,7 +323,11 @@ class PiCamera(AbstractCamera):
         """Set the exposure time in microseconds."""
         if not self.camera:
             raise Exception("Camera not initialized")
+        
+        # Validate and clamp exposure time
+        us = max(100, min(us, 300_000_000))  # Clamp between 100μs and 300s
         self.exposure_us = us
+        
         # Apply the setting to the camera
         try:
             self.camera.set_controls({"ExposureTime": us})
@@ -333,11 +342,27 @@ class PiCamera(AbstractCamera):
         try:
             controls = {}
             
-            # Set exposure
-            controls["ExposureTime"] = self.exposure_us
+            # Validate and clamp exposure time
+            exposure_us = max(100, min(self.exposure_us, 300_000_000))  # Clamp between 100μs and 300s
+            self.exposure_us = exposure_us  # Update the stored value
+            controls["ExposureTime"] = exposure_us
             
-            # Set gain (convert from our gain format to camera gain)
-            controls["AnalogueGain"] = self.gain
+            # Validate and clamp gain
+            gain = max(0.2, min(self.gain, 16.0))  # Clamp between 0.2 and 16.0
+            self.gain = gain  # Update the stored value
+            controls["AnalogueGain"] = gain
+            
+            # Validate and clamp night vision intensity
+            night_vision_intensity = max(1.0, min(self.night_vision_intensity, 80.0))  # Clamp between 1.0 and 80.0
+            self.night_vision_intensity = night_vision_intensity  # Update the stored value
+            
+            # Handle night vision mode
+            if self.night_vision_mode:
+                self.use_digital_gain = True
+                self.digital_gain = night_vision_intensity
+            else:
+                self.use_digital_gain = False
+                self.digital_gain = 1.0
             
             # Apply controls
             self.camera.set_controls(controls)
