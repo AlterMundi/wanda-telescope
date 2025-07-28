@@ -262,8 +262,18 @@ class PiCamera(AbstractCamera):
             # Reapply camera settings after reconfiguration
             self.update_camera_settings()
             
-            # Capture the image
-            self.camera.capture_file(filename)
+            # Capture the image using capture_array() to respect exposure settings
+            # This method properly waits for the exposure time
+            array = self.camera.capture_array()
+            
+            # Convert array to image and save
+            import cv2
+            # Convert from RGB to BGR for OpenCV
+            if len(array.shape) == 3 and array.shape[2] == 3:
+                array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            
+            # Save the image
+            cv2.imwrite(filename, array)
             
             # Restart preview if it was running
             if was_started:
