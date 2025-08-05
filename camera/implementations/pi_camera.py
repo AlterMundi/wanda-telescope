@@ -93,19 +93,49 @@ class PiCamera(AbstractCamera):
     def initialize(self):
         """Initialize the Pi camera hardware."""
         logger.info("Pi camera: initialize()")
-        try:
-            Picamera2, _, _ = self._import_picamera2()
-            self.camera = Picamera2()
-            
-            # Create capture directory if it doesn't exist
-            os.makedirs(self.capture_dir, exist_ok=True)
-            
-            self.status = "Pi camera ready"
-            logger.info("Pi camera hardware initialized successfully")
-        except Exception as e:
-            self.status = f"Pi camera error: {str(e)}"
-            logger.error(f"Failed to initialize Pi camera hardware: {e}")
-            raise
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                Picamera2, _, _ = self._import_picamera2()
+                
+                # Check if any cameras are available
+                camera_info = Picamera2.global_camera_info()
+                if not camera_info:
+                    error_msg = "No cameras detected by libcamera. Please check:\n"
+                    error_msg += "1. Camera cable is properly connected to CSI port\n"
+                    error_msg += "2. Camera cable is not damaged (try a different cable)\n"
+                    error_msg += "3. Camera module is properly seated\n"
+                    error_msg += "4. Power supply is adequate (use official Pi power supply)\n"
+                    error_msg += "5. Run 'sudo reboot' if camera was recently connected"
+                    raise Exception(error_msg)
+                
+                logger.info(f"Detected {len(camera_info)} camera(s)")
+                self.camera = Picamera2()
+                
+                # Create capture directory if it doesn't exist
+                os.makedirs(self.capture_dir, exist_ok=True)
+                
+                self.status = "Pi camera ready"
+                logger.info("Pi camera hardware initialized successfully")
+                return  # Success!
+                
+            except IndexError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Camera initialization attempt {attempt + 1} failed with IndexError, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    self.status = f"Pi camera error: Hardware connection issue"
+                    error_msg = f"Failed to initialize Pi camera after {max_retries} attempts.\n"
+                    error_msg += "The camera hardware is not responding. Please check the physical connection."
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+                    
+            except Exception as e:
+                self.status = f"Pi camera error: {str(e)}"
+                logger.error(f"Failed to initialize Pi camera hardware: {e}")
+                raise
     
     def create_preview_configuration(self, main=None):
         """Create preview configuration."""
