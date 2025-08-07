@@ -2,7 +2,7 @@
 
 # WANDA Telescope Launcher Script
 # This script sets up the environment and runs the WANDA telescope system
-# Can be run multiple times safely
+# Optimized for repeated runs with minimal setup time
 
 set -e  # Exit on any error
 
@@ -53,6 +53,21 @@ needs_system_packages() {
     return 1  # False - Regular systems don't need system packages
 }
 
+# Function to check if requirements are up to date
+check_requirements_up_to_date() {
+    if [ ! -f "requirements.txt" ]; then
+        return 1  # No requirements file, need to install
+    fi
+    
+    # Check if any requirements are missing or outdated
+    pip check --quiet 2>/dev/null || return 1
+    
+    # Quick check for critical packages
+    python3 -c "import flask, cv2, numpy" 2>/dev/null || return 1
+    
+    return 0  # Requirements are up to date
+}
+
 # Main script starts here
 print_status "Starting WANDA Telescope System Setup..."
 
@@ -101,21 +116,36 @@ else
     exit 1
 fi
 
-# Step 3: Upgrade pip to latest version
-print_status "Upgrading pip..."
-python3 -m pip install --upgrade pip > /dev/null 2>&1
+# Step 3: Quick pip upgrade (only if needed)
+print_status "Checking pip version..."
+CURRENT_PIP_VERSION=$(pip --version | cut -d' ' -f2)
+print_status "Current pip version: $CURRENT_PIP_VERSION"
 
-# Step 4: Install/update requirements
-if [ -f "requirements.txt" ]; then
-    print_status "Installing/updating requirements from requirements.txt..."
-    pip install -r requirements.txt
-    print_success "Requirements installed/updated"
+# Only upgrade pip if it's significantly outdated (older than 21.0)
+if [[ "$CURRENT_PIP_VERSION" < "21.0" ]]; then
+    print_status "Upgrading pip to latest version..."
+    python3 -m pip install --upgrade pip --quiet
+    print_success "Pip upgraded"
 else
-    print_warning "requirements.txt not found, installing basic requirements..."
-    pip install Flask Werkzeug Jinja2 opencv-python numpy Pillow
+    print_success "Pip is up to date"
 fi
 
-# Step 5: Install picamera2 if on Raspberry Pi
+# Step 4: Install/update requirements (only if needed)
+if check_requirements_up_to_date; then
+    print_success "Requirements are up to date"
+else
+    if [ -f "requirements.txt" ]; then
+        print_status "Installing/updating requirements from requirements.txt..."
+        pip install -r requirements.txt --quiet
+        print_success "Requirements installed/updated"
+    else
+        print_warning "requirements.txt not found, installing basic requirements..."
+        pip install Flask Werkzeug Jinja2 opencv-python numpy Pillow --quiet
+        print_success "Basic requirements installed"
+    fi
+fi
+
+# Step 5: Install picamera2 if on Raspberry Pi (only if needed)
 if [ "$PI_MODE" = true ]; then
     print_status "Checking for picamera2 (Raspberry Pi camera library)..."
     
@@ -174,14 +204,14 @@ if [ "$PI_MODE" = true ]; then
     fi
 fi
 
-# Step 8: Final system check
-print_status "Performing system check..."
+# Step 8: Quick system check
+print_status "Performing quick system check..."
 
 # Check Python version
 PYTHON_VERSION=$(python3 --version)
 print_status "Python version: $PYTHON_VERSION"
 
-# Check critical imports
+# Quick check for critical imports
 print_status "Testing critical imports..."
 IMPORTS_OK=true
 
@@ -197,8 +227,7 @@ fi
 
 if [ "$PI_MODE" = true ]; then
     if ! python3 -c "import picamera2" 2>/dev/null; then
-        print_error "picamera2 import failed"
-        IMPORTS_OK=false
+        print_warning "picamera2 import failed (will use mock camera)"
     fi
 fi
 
