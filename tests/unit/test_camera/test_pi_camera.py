@@ -12,6 +12,9 @@ def mock_picamera2():
     mock_h264_encoder = Mock()
     mock_file_output = Mock()
     
+    # Mock global_camera_info to return a list with one camera info
+    mock_picamera2.global_camera_info.return_value = [{'model': 'Test Camera', 'id': 0}]
+    
     with patch('camera.implementations.pi_camera.PiCamera._import_picamera2') as mock_import:
         mock_import.return_value = (mock_picamera2, mock_h264_encoder, mock_file_output)
         yield mock_picamera2
