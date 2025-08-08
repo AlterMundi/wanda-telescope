@@ -43,6 +43,69 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 - Real-time camera feed via MJPEG streaming
 - Responsive design with collapsible control panels
 
+## Development Guidelines
+
+### 1. Test-Driven Development (TDD) - ALWAYS REQUIRED
+- **ALWAYS work using TDD methodology**: Write tests first, then implement code.
+- **No implementation without tests**: Every new feature must have corresponding tests.
+- **Test coverage requirement**: Aim for at least 85% code coverage for all new code.
+- **Test structure**: Follow the pattern: Arrange → Act → Assert (AAA).
+- **Test naming**: Use descriptive test names that explain the scenario being tested.
+- **Test organization**: Group related tests in classes and use clear test method names.
+- **Mock strategy**: Use mocks for external dependencies (hardware, network, file system).
+- **Error testing**: Include tests for error conditions and edge cases.
+
+#### TDD Workflow:
+1. **Write failing test** - Define the expected behavior
+2. **Write minimal code** - Make the test pass
+3. **Refactor** - Improve code while keeping tests green
+4. **Repeat** - Continue the cycle for new features
+
+#### Test Requirements:
+- **Unit tests** for all functions and methods
+- **Integration tests** for component interactions
+- **Error handling tests** for exception scenarios
+- **Edge case tests** for boundary conditions
+- **Mock tests** for hardware dependencies
+- **Performance tests** for critical operations (camera, motor control)
+- **Hardware simulation tests** for development environments
+
+### 2. Code Quality Standards
+
+#### Simplicity
+- Write clear, concise, and maintainable code.
+- Favor straightforward solutions over complex abstractions.
+- Use descriptive variable/function names that reflect astronomical or hardware context (e.g., telescope_altitude, move_stepper).
+- Avoid over-engineering; prioritize readability for contributors with varying expertise.
+
+#### Avoid Duplication
+- Reuse existing functions, classes, or modules to prevent redundant code.
+- Refactor duplicated logic into shared utilities in a utils/ or common/ module.
+- Use constants for repeated values (e.g., MOTOR_STEP_ANGLE = 1.8).
+- Ensure shared code is well-documented and tested before reuse.
+
+#### Code Organization
+- Keep files under 300 lines where possible for maintainability.
+- Exceptions allowed for core modules (e.g., main.py, telescope_control.ino) if readability is maintained.
+  - Use clear section comments (e.g., // Motor Control, # Data Processing) to break up long files.
+- Refactor into modules when logical (e.g., separate motor_control.py, sensor_utils.py).
+- Follow project structure:
+  - Python: Place modules in src/ or lib/.
+  - Arduino: Use .ino for main sketch, .h for helper libraries.
+  - Tests: Store in tests/ with clear naming (e.g., test_motor_control.py).
+- Use consistent file naming: lowercase with underscores (e.g., telescope_utils.py).
+
+### 3. Change Control
+- Only implement requested changes or fixes.
+- Do not introduce new patterns, libraries, or frameworks unless:
+  - Existing solutions are demonstrably insufficient (e.g., performance bottlenecks or missing functionality).
+  - Rationale is documented in commit messages and a docs/rationale.md file.
+- Before removing old code:
+  - Validate new implementations with tests (e.g., unit tests for Python, hardware tests for Arduino).
+  - Confirm changes align with project goals (e.g., telescope control accuracy).
+- Preserve backward compatibility for existing hardware interfaces unless explicitly requested.
+- **Breaking changes require**: Migration guide, deprecation warnings, and extended testing period.
+
 ## Important Implementation Details
 
 ### Camera State Management
@@ -220,3 +283,13 @@ The camera factory automatically detects cameras in this order:
 - **Pi Camera Issues**: Check CSI cable connection and libcamera installation
 - **USB Camera Issues**: Verify UVC driver support and USB port functionality
 - **Detection Problems**: Use `camera/factory.py` detection methods for debugging
+
+## Additional Notes
+- Comment critical logic (e.g., coordinate calculations, motor timing) with purpose and context.
+- Use docstrings for Python functions/classes and inline comments for Arduino.
+- Ensure code runs on target hardware (e.g., Arduino Uno, Raspberry Pi) and specify dependencies in requirements.txt or README.md.
+- Adhere to PEP 8 for Python.
+- **Test files should be comprehensive**: Include positive tests, negative tests, and edge cases.
+- **Test documentation**: Use docstrings in test methods to explain test purpose and expected behavior.
+- **Hardware abstraction**: Use mock implementations for development and testing without physical hardware.
+- **Error logging**: Implement comprehensive logging for debugging hardware issues in production.
