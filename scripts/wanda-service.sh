@@ -233,6 +233,10 @@ start_wanda() {
     local ip_address=$(hostname -I | awk '{print $1}')
     if [ -n "$ip_address" ]; then
         log_info "  • Network: http://$ip_address:5000"
+        
+        # Announce IP address for network discovery
+        log_info "Announcing network presence..."
+        bash "$PROJECT_DIR/scripts/announce-ip.sh" >/dev/null 2>&1 &
     fi
     
     # Execute the main application
