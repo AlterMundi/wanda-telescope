@@ -39,6 +39,7 @@ ENV/
 wanda.log
 wanda_captures/
 captures/
+session_metadata.json
 
 # Test captures
 tests/captures/

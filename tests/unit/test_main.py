@@ -66,7 +66,8 @@ class TestInitializeCamera:
         
         result = initialize_camera()
         
-        mock_print.assert_called_with("Failed to initialize camera: Factory error")
+        # Check that the final message was printed (the error handling now prints multiple lines)
+        mock_print.assert_called_with("Please fix the hardware issue and restart the application.\n")
         assert result is None
     
     @patch('main.CameraFactory')
@@ -79,7 +80,8 @@ class TestInitializeCamera:
         
         result = initialize_camera()
         
-        mock_print.assert_called_with("Failed to initialize camera: Initialize error")
+        # Check that the final message was printed (the error handling now prints multiple lines)
+        mock_print.assert_called_with("Please fix the hardware issue and restart the application.\n")
         assert result is None
     
     @patch('main.CameraFactory')
@@ -93,7 +95,8 @@ class TestInitializeCamera:
         
         result = initialize_camera()
         
-        mock_print.assert_called_with("Failed to initialize camera: Configure error")
+        # Check that the final message was printed (the error handling now prints multiple lines)
+        mock_print.assert_called_with("Please fix the hardware issue and restart the application.\n")
         assert result is None
 
 

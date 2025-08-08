@@ -1,0 +1,41 @@
+[Unit]
+Description=WANDA Telescope Astrophotography System
+Documentation=https://github.com/AlterMundi/wanda-telescope
+After=network.target network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=astro2
+Group=astro2
+WorkingDirectory=/home/astro2/repos/wanda-telescope
+Environment=PATH=/home/astro2/repos/wanda-telescope/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=VIRTUAL_ENV=/home/astro2/repos/wanda-telescope/venv
+Environment=PYTHONPATH=/home/astro2/repos/wanda-telescope
+Environment=HOME=/home/astro2
+
+# Use the startup script for robust initialization
+ExecStart=/usr/bin/bash /home/astro2/repos/wanda-telescope/scripts/wanda-service.sh
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart configuration
+Restart=on-failure
+RestartSec=10
+
+# Security settings (relaxed for hardware access)
+NoNewPrivileges=false
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wanda-telescope
+
+[Install]
+WantedBy=multi-user.target
