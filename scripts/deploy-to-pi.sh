@@ -2,7 +2,7 @@
 
 # WANDA Telescope One-Command Deployment Script
 # This script completely sets up WANDA Telescope on a fresh Raspberry Pi OS Lite
-# Usage: curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/feat/auto-deploy-rpi/scripts/deploy-to-pi.sh | bash
 
 set -e
 
@@ -35,7 +35,7 @@ print_step() {
 }
 
 # Configuration
-BRANCH="main"
+BRANCH="feat/auto-deploy-rpi"
 REPO_URL="https://github.com/AlterMundi/wanda-telescope.git"
 PROJECT_DIR="$HOME/wanda-telescope"
 USER=$(whoami)
@@ -92,16 +92,9 @@ install_system_dependencies() {
         cmake \
         pkg-config \
         libatlas-base-dev \
-        libjasper-dev \
-        libqtcore4 \
-        libqtgui4 \
-        libqt4-test \
         libhdf5-dev \
         libhdf5-serial-dev \
         libhdf5-103 \
-        libqtgui4 \
-        libqtwebkit4 \
-        libqt4-test \
         python3-pyqt5 \
         libgtk-3-dev \
         libavcodec-dev \
@@ -113,31 +106,24 @@ install_system_dependencies() {
         libjpeg-dev \
         libpng-dev \
         libtiff-dev \
-        libatlas-base-dev \
         gfortran \
         libopenblas-dev \
         liblapack-dev \
-        libhdf5-dev \
-        libhdf5-serial-dev \
-        libhdf5-103 \
-        libqtgui4 \
-        libqtwebkit4 \
-        libqt4-test \
-        python3-pyqt5 \
-        libgtk-3-dev \
-        libavcodec-dev \
-        libavformat-dev \
-        libswscale-dev \
-        libv4l-dev \
-        libxvidcore-dev \
-        libx264-dev \
-        libjpeg-dev \
-        libpng-dev \
-        libtiff-dev \
-        libatlas-base-dev \
-        gfortran \
-        libopenblas-dev \
-        liblapack-dev
+        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer-plugins-bad1.0-dev \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-libav \
+        gstreamer1.0-tools \
+        gstreamer1.0-x \
+        gstreamer1.0-alsa \
+        gstreamer1.0-gl \
+        gstreamer1.0-gtk3 \
+        gstreamer1.0-qt5 \
+        gstreamer1.0-pulseaudio
     
     # Install Pi-specific packages if on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
