@@ -71,8 +71,63 @@ check_system() {
     print_success "System check completed"
 }
 
+configure_arducam_imx477() {
+    print_step "2/9: Checking for Arducam IMX477 camera configuration..."
+    
+    # Check if we're on Raspberry Pi 5
+    if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+        print_info "Raspberry Pi 5 detected, checking for Arducam IMX477 configuration..."
+        
+        # Check if config.txt needs modification
+        local config_file="/boot/firmware/config.txt"
+        local needs_reboot=false
+        
+        if [ -f "$config_file" ]; then
+            # Check if camera_auto_detect is set to 0
+            if ! grep -q "^camera_auto_detect=0" "$config_file"; then
+                print_info "Setting camera_auto_detect=0 for Arducam compatibility..."
+                # Add or modify camera_auto_detect line
+                if grep -q "^camera_auto_detect=" "$config_file"; then
+                    sudo sed -i 's/^camera_auto_detect=.*/camera_auto_detect=0/' "$config_file"
+                else
+                    echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
+                fi
+                needs_reboot=true
+            fi
+            
+            # Check if imx708 dtoverlay is already added
+            if ! grep -q "^dtoverlay=imx708" "$config_file"; then
+                print_info "Adding dtoverlay=imx708 for Arducam IMX477 support..."
+                # Find [all] section and add dtoverlay below it
+                if grep -q "^\[all\]" "$config_file"; then
+                    sudo sed -i '/^\[all\]/a dtoverlay=imx708' "$config_file"
+                else
+                    # If no [all] section, add it at the end
+                    echo "" | sudo tee -a "$config_file" > /dev/null
+                    echo "[all]" | sudo tee -a "$config_file" > /dev/null
+                    echo "dtoverlay=imx708" | sudo tee -a "$config_file" > /dev/null
+                fi
+                needs_reboot=true
+            fi
+            
+            if [ "$needs_reboot" = true ]; then
+                print_warning "⚠️  IMPORTANT: Arducam IMX477 configuration changes detected!"
+                print_warning "   A reboot will be required after deployment completes."
+                print_warning "   Please reboot your Pi when the script finishes."
+                print_success "Arducam IMX477 configuration updated"
+            else
+                print_success "Arducam IMX477 configuration already correct"
+            fi
+        else
+            print_warning "Config file not found at $config_file"
+        fi
+    else
+        print_info "Not Raspberry Pi 5, skipping Arducam IMX477 configuration"
+    fi
+}
+
 install_system_dependencies() {
-    print_step "2/8: Installing system dependencies..."
+    print_step "3/9: Installing system dependencies..."
     
     # Update package list
     print_info "Updating package list..."
@@ -142,7 +197,7 @@ install_system_dependencies() {
 }
 
 setup_directories() {
-    print_step "3/8: Setting up project directories..."
+    print_step "4/9: Setting up project directories..."
     
     # Create project directory
     mkdir -p "$PROJECT_DIR"
@@ -152,7 +207,7 @@ setup_directories() {
 }
 
 clone_repository() {
-    print_step "4/8: Cloning WANDA Telescope repository..."
+    print_step "5/9: Cloning WANDA Telescope repository..."
     
     if [ -d "$PROJECT_DIR/.git" ]; then
         print_info "Repository exists, updating..."
@@ -169,7 +224,7 @@ clone_repository() {
 }
 
 setup_python_environment() {
-    print_step "5/8: Setting up Python environment..."
+    print_step "6/9: Setting up Python environment..."
     
     cd "$PROJECT_DIR"
     
@@ -204,7 +259,7 @@ setup_python_environment() {
 }
 
 install_systemd_service() {
-    print_step "6/8: Installing systemd service..."
+    print_step "7/9: Installing systemd service..."
     
     cd "$PROJECT_DIR"
     
@@ -240,7 +295,7 @@ EOF
 }
 
 test_installation() {
-    print_step "7/8: Testing installation..."
+    print_step "8/9: Testing installation..."
     
     # Start service
     print_info "Starting WANDA service..."
@@ -267,7 +322,7 @@ test_installation() {
 }
 
 show_completion_info() {
-    print_step "8/8: Deployment complete!"
+    print_step "9/9: Deployment complete!"
     
     echo
     print_success "🎉 WANDA Telescope Deployment Complete!"
@@ -291,6 +346,9 @@ show_completion_info() {
     print_info "  2. Access the web interface from any device on your network"
     print_info "  3. Configure camera and mount settings through the web interface"
     echo
+    print_info "⚠️  IMPORTANT: If Arducam IMX477 configuration was applied,"
+    print_info "   a reboot is REQUIRED for the camera to work properly!"
+    echo
     print_info "Troubleshooting:"
     print_info "  • Check logs: sudo journalctl -u wanda-telescope -f"
     print_info "  • Manual start: cd $PROJECT_DIR && source venv/bin/activate && python main.py"
@@ -301,6 +359,7 @@ show_completion_info() {
 main() {
     print_banner
     check_system
+    configure_arducam_imx477
     install_system_dependencies
     setup_directories
     clone_repository
