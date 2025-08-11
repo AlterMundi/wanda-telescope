@@ -123,7 +123,8 @@ install_system_dependencies() {
         gstreamer1.0-gl \
         gstreamer1.0-gtk3 \
         gstreamer1.0-qt5 \
-        gstreamer1.0-pulseaudio
+        gstreamer1.0-pulseaudio \
+        libcap-dev
     
     # Install Pi-specific packages if on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
