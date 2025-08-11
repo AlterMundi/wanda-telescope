@@ -2,7 +2,7 @@
 
 # WANDA Telescope One-Command Deployment Script
 # This script completely sets up WANDA Telescope on a fresh Raspberry Pi OS Lite
-# Usage: curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/feat/auto-deploy-rpi/scripts/deploy-to-pi.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
 
 set -e
 
@@ -35,7 +35,7 @@ print_step() {
 }
 
 # Configuration
-BRANCH="feat/auto-deploy-rpi"
+BRANCH="main"
 REPO_URL="https://github.com/AlterMundi/wanda-telescope.git"
 PROJECT_DIR="$HOME/wanda-telescope"
 USER=$(whoami)
