@@ -3,6 +3,8 @@ Camera factory module for creating camera instances.
 """
 import logging
 import cv2
+import subprocess
+import os
 from typing import Optional, Type
 
 from .base import AbstractCamera
@@ -15,6 +17,19 @@ logger = logging.getLogger(__name__)
 
 class CameraFactory:
     """Factory class for creating camera instances."""
+    
+    @staticmethod
+    def _check_rpicam_camera():
+        """Check for Raspberry Pi camera using rpicam-still command."""
+        try:
+            result = subprocess.run(['rpicam-still', '--list-cameras'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and 'imx477' in result.stdout.lower():
+                logger.info("Raspberry Pi camera detected via rpicam-still")
+                return True
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            pass
+        return False
     
     @staticmethod
     def create_camera() -> AbstractCamera:
@@ -35,7 +50,16 @@ class CameraFactory:
                 logger.info("Raspberry Pi camera detected")
                 return PiCamera()
             except (ImportError, ModuleNotFoundError):
-                logger.info("Raspberry Pi camera not available")
+                logger.info("Raspberry Pi camera not available via picamera2")
+                
+                # Fallback: try using rpicam-still command
+                if CameraFactory._check_rpicam_camera():
+                    try:
+                        from .implementations.pi_camera import PiCamera
+                        logger.info("Raspberry Pi camera detected via rpicam-still, attempting PiCamera initialization")
+                        return PiCamera()
+                    except Exception as e:
+                        logger.warning(f"PiCamera initialization failed despite camera detection: {e}")
             
             # Then try to detect USB camera
             try:
