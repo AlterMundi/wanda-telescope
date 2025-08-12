@@ -54,6 +54,14 @@ print_banner() {
 check_system() {
     print_step "1/8: Checking system requirements..."
     
+    # Check network connectivity
+    print_info "Checking network connectivity..."
+    if ! ping -c 1 github.com >/dev/null 2>&1; then
+        print_error "No internet connection. Please check your network and try again."
+        exit 1
+    fi
+    print_success "Network connectivity confirmed"
+    
     # Check if we're on a Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
         local pi_model=$(cat /proc/device-tree/model)
@@ -72,55 +80,13 @@ check_system() {
 }
 
 configure_arducam_imx477() {
-    print_step "2/9: Checking for Arducam IMX477 camera configuration..."
+    print_step "2/8: Checking for Arducam IMX477 camera configuration..."
     
     # Check if we're on Raspberry Pi 5
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
-        print_info "Raspberry Pi 5 detected, checking for Arducam IMX477 configuration..."
-        
-        # Check if config.txt needs modification
-        local config_file="/boot/firmware/config.txt"
-        local needs_reboot=false
-        
-        if [ -f "$config_file" ]; then
-            # Check if camera_auto_detect is set to 0
-            if ! grep -q "^camera_auto_detect=0" "$config_file"; then
-                print_info "Setting camera_auto_detect=0 for Arducam compatibility..."
-                # Add or modify camera_auto_detect line
-                if grep -q "^camera_auto_detect=" "$config_file"; then
-                    sudo sed -i 's/^camera_auto_detect=.*/camera_auto_detect=0/' "$config_file"
-                else
-                    echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
-                fi
-                needs_reboot=true
-            fi
-            
-            # Check if imx708 dtoverlay is already added
-            if ! grep -q "^dtoverlay=imx708" "$config_file"; then
-                print_info "Adding dtoverlay=imx708 for Arducam IMX477 support..."
-                # Find [all] section and add dtoverlay below it
-                if grep -q "^\[all\]" "$config_file"; then
-                    sudo sed -i '/^\[all\]/a dtoverlay=imx708' "$config_file"
-                else
-                    # If no [all] section, add it at the end
-                    echo "" | sudo tee -a "$config_file" > /dev/null
-                    echo "[all]" | sudo tee -a "$config_file" > /dev/null
-                    echo "dtoverlay=imx708" | sudo tee -a "$config_file" > /dev/null
-                fi
-                needs_reboot=true
-            fi
-            
-            if [ "$needs_reboot" = true ]; then
-                print_warning "⚠️  IMPORTANT: Arducam IMX477 configuration changes detected!"
-                print_warning "   A reboot will be required after deployment completes."
-                print_warning "   Please reboot your Pi when the script finishes."
-                print_success "Arducam IMX477 configuration updated"
-            else
-                print_success "Arducam IMX477 configuration already correct"
-            fi
-        else
-            print_warning "Config file not found at $config_file"
-        fi
+        print_info "Raspberry Pi 5 detected"
+        print_info "Note: For Arducam IMX477 cameras, manual configuration of /boot/firmware/config.txt may be required"
+        print_info "See docs/ARDUCAM_UC955_SETUP.md for detailed setup instructions"
     else
         print_info "Not Raspberry Pi 5, skipping Arducam IMX477 configuration"
     fi
@@ -197,75 +163,123 @@ install_system_dependencies() {
 }
 
 setup_directories() {
-    print_step "4/9: Setting up project directories..."
+    print_step "4/8: Setting up project directories..."
     
     # Create project directory
-    mkdir -p "$PROJECT_DIR"
-    cd "$PROJECT_DIR"
+    if ! mkdir -p "$PROJECT_DIR"; then
+        print_error "Failed to create project directory: $PROJECT_DIR"
+        exit 1
+    fi
+    
+    if ! cd "$PROJECT_DIR"; then
+        print_error "Failed to change to project directory: $PROJECT_DIR"
+        exit 1
+    fi
     
     print_success "Directories created"
 }
 
 clone_repository() {
-    print_step "5/9: Cloning WANDA Telescope repository..."
+    print_step "5/8: Cloning WANDA Telescope repository..."
     
     if [ -d "$PROJECT_DIR/.git" ]; then
         print_info "Repository exists, updating..."
-        git fetch origin
-        git checkout "$BRANCH"
-        git pull origin "$BRANCH"
+        if ! git fetch origin; then
+            print_error "Failed to fetch from origin"
+            exit 1
+        fi
+        if ! git checkout "$BRANCH"; then
+            print_error "Failed to checkout branch: $BRANCH"
+            exit 1
+        fi
+        if ! git pull origin "$BRANCH"; then
+            print_error "Failed to pull from origin"
+            exit 1
+        fi
         print_success "Repository updated"
     else
         print_info "Cloning repository..."
-        git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"
-        cd "$PROJECT_DIR"
+        if ! git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"; then
+            print_error "Failed to clone repository"
+            exit 1
+        fi
+        if ! cd "$PROJECT_DIR"; then
+            print_error "Failed to change to project directory after clone"
+            exit 1
+        fi
         print_success "Repository cloned"
     fi
 }
 
 setup_python_environment() {
-    print_step "6/9: Setting up Python environment..."
+    print_step "6/8: Setting up Python environment..."
     
-    cd "$PROJECT_DIR"
+    if ! cd "$PROJECT_DIR"; then
+        print_error "Failed to change to project directory"
+        exit 1
+    fi
     
     # Create virtual environment
     print_info "Creating Python virtual environment..."
-    python3 -m venv venv
+    if ! python3 -m venv venv; then
+        print_error "Failed to create virtual environment"
+        exit 1
+    fi
     
-    # Activate virtual environment
-    print_info "Activating virtual environment..."
-    source venv/bin/activate
+    # Use full path to pip instead of activating environment
+    local pip_path="$PROJECT_DIR/venv/bin/pip"
+    local python_path="$PROJECT_DIR/venv/bin/python"
     
     # Upgrade pip
     print_info "Upgrading pip..."
-    pip install --upgrade pip setuptools wheel
+    if ! "$pip_path" install --upgrade pip setuptools wheel; then
+        print_error "Failed to upgrade pip"
+        exit 1
+    fi
     
     # Install Python dependencies
     print_info "Installing Python dependencies..."
     if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt
+        if ! "$pip_path" install -r requirements.txt; then
+            print_error "Failed to install requirements.txt dependencies"
+            exit 1
+        fi
     else
         print_warning "requirements.txt not found, installing basic dependencies..."
-        pip install flask opencv-python numpy pillow requests
+        if ! "$pip_path" install flask opencv-python numpy pillow requests; then
+            print_error "Failed to install basic dependencies"
+            exit 1
+        fi
     fi
     
     # Install additional dependencies for Pi camera
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
         print_info "Installing Pi camera dependencies..."
-        pip install picamera2
+        if ! "$pip_path" install picamera2; then
+            print_warning "Failed to install picamera2 - will use mock camera"
+        fi
     fi
     
     print_success "Python environment setup completed"
 }
 
 install_systemd_service() {
-    print_step "7/9: Installing systemd service..."
+    print_step "7/8: Installing systemd service..."
     
-    cd "$PROJECT_DIR"
+    if ! cd "$PROJECT_DIR"; then
+        print_error "Failed to change to project directory"
+        exit 1
+    fi
+    
+    # Check if main.py exists
+    if [ ! -f "main.py" ]; then
+        print_error "main.py not found in project directory"
+        exit 1
+    fi
     
     # Create systemd service file
     print_info "Creating systemd service file..."
-    sudo tee /etc/systemd/system/wanda-telescope.service > /dev/null <<EOF
+    if ! sudo tee /etc/systemd/system/wanda-telescope.service > /dev/null <<EOF
 [Unit]
 Description=WANDA Telescope Service
 After=network.target
@@ -285,25 +299,49 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
+    then
+        print_error "Failed to create systemd service file"
+        exit 1
+    fi
     
     # Reload systemd and enable service
     print_info "Enabling service..."
-    sudo systemctl daemon-reload
-    sudo systemctl enable wanda-telescope
+    if ! sudo systemctl daemon-reload; then
+        print_error "Failed to reload systemd daemon"
+        exit 1
+    fi
+    
+    if ! sudo systemctl enable wanda-telescope; then
+        print_error "Failed to enable wanda-telescope service"
+        exit 1
+    fi
     
     print_success "Systemd service installed and enabled"
 }
 
 test_installation() {
-    print_step "8/9: Testing installation..."
+    print_step "8/8: Testing installation..."
     
     # Start service
     print_info "Starting WANDA service..."
-    sudo systemctl start wanda-telescope
+    if ! sudo systemctl start wanda-telescope; then
+        print_error "Failed to start wanda-telescope service"
+        sudo systemctl status wanda-telescope --no-pager
+        exit 1
+    fi
     
-    # Wait for startup
+    # Wait for startup with better error checking
     print_info "Waiting for service to start..."
-    sleep 15
+    local max_wait=30
+    local wait_count=0
+    
+    while [ $wait_count -lt $max_wait ]; do
+        if sudo systemctl is-active wanda-telescope >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+        wait_count=$((wait_count + 1))
+    done
     
     # Check service status
     if sudo systemctl is-active wanda-telescope >/dev/null 2>&1; then
@@ -315,7 +353,7 @@ test_installation() {
             print_success "WANDA is accessible at: http://$ip_address:5000"
         fi
     else
-        print_error "Service failed to start"
+        print_error "Service failed to start within $max_wait seconds"
         sudo systemctl status wanda-telescope --no-pager
         exit 1
     fi
@@ -346,17 +384,43 @@ show_completion_info() {
     print_info "  2. Access the web interface from any device on your network"
     print_info "  3. Configure camera and mount settings through the web interface"
     echo
-    print_info "⚠️  IMPORTANT: If Arducam IMX477 configuration was applied,"
-    print_info "   a reboot is REQUIRED for the camera to work properly!"
-    echo
     print_info "Troubleshooting:"
     print_info "  • Check logs: sudo journalctl -u wanda-telescope -f"
     print_info "  • Manual start: cd $PROJECT_DIR && source venv/bin/activate && python main.py"
     echo
 }
 
+# Cleanup function for error handling
+cleanup_on_error() {
+    print_error "Deployment failed! Cleaning up..."
+    
+    # Stop service if it was started
+    if sudo systemctl is-active wanda-telescope >/dev/null 2>&1; then
+        print_info "Stopping wanda-telescope service..."
+        sudo systemctl stop wanda-telescope 2>/dev/null || true
+    fi
+    
+    # Disable service if it was enabled
+    if sudo systemctl is-enabled wanda-telescope >/dev/null 2>&1; then
+        print_info "Disabling wanda-telescope service..."
+        sudo systemctl disable wanda-telescope 2>/dev/null || true
+    fi
+    
+    # Remove service file if it exists
+    if [ -f /etc/systemd/system/wanda-telescope.service ]; then
+        print_info "Removing systemd service file..."
+        sudo rm -f /etc/systemd/system/wanda-telescope.service
+        sudo systemctl daemon-reload 2>/dev/null || true
+    fi
+    
+    print_error "Cleanup completed. Please check the error messages above and try again."
+}
+
 # Main deployment process
 main() {
+    # Set trap for error handling
+    trap cleanup_on_error ERR
+    
     print_banner
     check_system
     configure_arducam_imx477
@@ -367,6 +431,9 @@ main() {
     install_systemd_service
     test_installation
     show_completion_info
+    
+    # Clear trap on successful completion
+    trap - ERR
 }
 
 # Check if running as root
@@ -374,6 +441,23 @@ if [ "$EUID" -eq 0 ]; then
     print_error "Do not run this script as root. Run as the user that will operate WANDA."
     exit 1
 fi
+
+# Validate sudo access
+print_info "Validating sudo access..."
+if ! sudo -n true 2>/dev/null; then
+    print_info "Sudo access required. Please enter your password when prompted."
+    if ! sudo true; then
+        print_error "Sudo access validation failed. Please ensure you have sudo privileges."
+        exit 1
+    fi
+fi
+
+# Check for required commands
+for cmd in git python3 pip3; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        print_warning "Command '$cmd' not found - will be installed during setup"
+    fi
+done
 
 # Run main deployment
 main "$@"
