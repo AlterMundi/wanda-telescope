@@ -430,6 +430,75 @@ cleanup_on_error() {
     print_error "Cleanup completed. Please check the error messages above and try again."
 }
 
+# Check if running as root
+if [ "$EUID" -eq 0 ]; then
+    print_error "Do not run this script as root. Run as the user that will operate WANDA."
+    exit 1
+fi
+
+# Check if this is a reinstallation
+if [ -d "$HOME/wanda-telescope" ] || sudo systemctl list-unit-files | grep -q "wanda-telescope"; then
+    print_warning "WANDA Telescope appears to be already installed!"
+    echo
+    print_info "Options:"
+    print_info "  1. Clean reinstall (remove existing installation and start fresh)"
+    print_info "  2. Exit and keep existing installation"
+    echo
+    read -p "Choose option (1 or 2): " choice
+    
+    case $choice in
+        1)
+            print_info "Performing clean reinstall..."
+            cleanup_existing_installation
+            ;;
+        2)
+            print_info "Exiting. No changes made."
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+fi
+
+# Cleanup function for existing installations
+cleanup_existing_installation() {
+    print_info "Cleaning up existing WANDA installation..."
+    
+    # Stop and disable service
+    if sudo systemctl is-active wanda-telescope >/dev/null 2>&1; then
+        print_info "Stopping wanda-telescope service..."
+        sudo systemctl stop wanda-telescope
+    fi
+    
+    if sudo systemctl is-enabled wanda-telescope >/dev/null 2>&1; then
+        print_info "Disabling wanda-telescope service..."
+        sudo systemctl disable wanda-telescope
+    fi
+    
+    # Remove service file
+    if [ -f /etc/systemd/system/wanda-telescope.service ]; then
+        print_info "Removing systemd service file..."
+        sudo rm -f /etc/systemd/system/wanda-telescope.service
+        sudo systemctl daemon-reload
+    fi
+    
+    # Remove project directory
+    if [ -d "$HOME/wanda-telescope" ]; then
+        print_info "Removing project directory..."
+        rm -rf "$HOME/wanda-telescope"
+    fi
+    
+    # Clean up any broken packages
+    print_info "Cleaning up package system..."
+    sudo apt autoremove -y
+    sudo apt autoclean
+    
+    print_success "Cleanup completed. Ready for fresh installation."
+    echo
+}
+
 # Main deployment process
 main() {
     # Set trap for error handling
@@ -449,12 +518,6 @@ main() {
     # Clear trap on successful completion
     trap - ERR
 }
-
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    print_error "Do not run this script as root. Run as the user that will operate WANDA."
-    exit 1
-fi
 
 # Validate sudo access
 print_info "Validating sudo access..."
