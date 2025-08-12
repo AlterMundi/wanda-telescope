@@ -60,7 +60,28 @@ check_system() {
         print_error "No internet connection. Please check your network and try again."
         exit 1
     fi
+    
+    # Check for broken packages and fix them
+    print_info "Checking for broken packages..."
+    if dpkg -l | grep -q "^iU\|^rc"; then
+        print_warning "Found broken packages, attempting to fix..."
+        sudo apt --fix-broken install -y || true
+        sudo dpkg --configure -a || true
+    fi
+    
     print_success "Network connectivity confirmed"
+    
+    # Check available disk space (need at least 2GB free)
+    print_info "Checking available disk space..."
+    local available_space=$(df / | awk 'NR==2 {print $4}')
+    local required_space=2097152  # 2GB in KB
+    
+    if [ "$available_space" -lt "$required_space" ]; then
+        print_error "Insufficient disk space. Need at least 2GB free, but only $(($available_space / 1024))MB available."
+        print_info "Please free up some space and try again."
+        exit 1
+    fi
+    print_success "Disk space check passed ($(($available_space / 1024))MB available)"
     
     # Check if we're on a Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
@@ -93,18 +114,19 @@ configure_arducam_imx477() {
 }
 
 install_system_dependencies() {
-    print_step "3/9: Installing system dependencies..."
+    print_step "3/8: Installing system dependencies..."
     
     # Update package list
     print_info "Updating package list..."
-    sudo apt update -qq
+    if ! sudo apt update -qq; then
+        print_error "Failed to update package list"
+        exit 1
+    fi
     
-    # Install essential packages
+    # Install only essential packages for WANDA Telescope
     print_info "Installing essential packages..."
-    sudo apt install -y -qq \
+    if ! sudo apt install -y -qq \
         git \
-        curl \
-        wget \
         python3 \
         python3-pip \
         python3-venv \
@@ -116,47 +138,39 @@ install_system_dependencies() {
         libhdf5-dev \
         libhdf5-serial-dev \
         libhdf5-103 \
-        python3-pyqt5 \
-        libgtk-3-dev \
         libavcodec-dev \
         libavformat-dev \
         libswscale-dev \
         libv4l-dev \
-        libxvidcore-dev \
-        libx264-dev \
         libjpeg-dev \
         libpng-dev \
         libtiff-dev \
-        gfortran \
-        libopenblas-dev \
-        liblapack-dev \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
-        libgstreamer-plugins-bad1.0-dev \
         gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good \
-        gstreamer1.0-plugins-bad \
-        gstreamer1.0-plugins-ugly \
-        gstreamer1.0-libav \
-        gstreamer1.0-tools \
-        gstreamer1.0-x \
-        gstreamer1.0-alsa \
-        gstreamer1.0-gl \
-        gstreamer1.0-gtk3 \
-        gstreamer1.0-qt5 \
-        gstreamer1.0-pulseaudio \
-        libcap-dev
+        gstreamer1.0-tools; then
+        
+        print_error "Failed to install system packages"
+        print_info "Attempting to fix broken packages..."
+        sudo apt --fix-broken install -y || true
+        sudo dpkg --configure -a || true
+        exit 1
+    fi
     
     # Install Pi-specific packages if on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
         print_info "Installing Raspberry Pi specific packages..."
-        sudo apt install -y -qq \
+        if ! sudo apt install -y -qq \
             python3-picamera2 \
             python3-libcamera \
             python3-rpi.gpio \
             python3-gpiozero \
             libraspberrypi-dev \
-            libraspberrypi-bin
+            libraspberrypi-bin; then
+            
+            print_warning "Failed to install some Pi-specific packages - will use mock implementations"
+        fi
     fi
     
     print_success "System dependencies installed"
