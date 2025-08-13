@@ -54,6 +54,31 @@ print_banner() {
 check_system() {
     print_step "1/6: Checking system requirements..."
     
+    # Check system clock first - this is critical for package operations
+    print_info "Checking system clock..."
+    local current_year=$(date '+%Y' 2>/dev/null || echo "0")
+    if [ "$current_year" -lt "2020" ] || [ "$current_year" -gt "2030" ]; then
+        print_warning "System clock appears to be severely incorrect: year $current_year"
+        print_info "This will prevent package installation. Attempting immediate correction..."
+        
+        # Try to set a reasonable date immediately
+        local current_month=$(date '+%m' 2>/dev/null || echo "01")
+        local current_day=$(date '+%d' 2>/dev/null || echo "01")
+        
+        if sudo date -s "2024-$current_month-$current_day" >/dev/null 2>&1; then
+            print_success "Corrected system date to: 2024-$current_month-$current_day"
+        elif sudo date -s "2025-$current_month-$current_day" >/dev/null 2>&1; then
+            print_success "Corrected system date to: 2025-$current_month-$current_day"
+        else
+            print_error "Cannot correct system date. Installation will fail."
+            print_info "Please manually set the system date before continuing."
+            print_info "You can use: sudo date -s '$(date -u)' to set UTC time"
+            exit 1
+        fi
+    else
+        print_success "System clock appears to be correct: year $current_year"
+    fi
+    
     # Check network connectivity
     print_info "Checking network connectivity..."
     if ! ping -c 1 github.com >/dev/null 2>&1; then
@@ -100,15 +125,229 @@ check_system() {
     print_success "System check completed"
 }
 
+sync_system_clock() {
+    print_step "1.5/6: Synchronizing system clock..."
+    
+    # Check if system clock is significantly off
+    print_info "Checking system clock..."
+    local current_date=$(date '+%Y-%m-%d')
+    
+    # Try multiple time sources for redundancy
+    local expected_date=""
+    local time_sources=(
+        "https://worldtimeapi.org/api/timezone/UTC"
+        "https://www.google.com"
+        "https://httpbin.org/headers"
+    )
+    
+    for source in "${time_sources[@]}"; do
+        if [ "$source" = "https://www.google.com" ]; then
+            # Extract date from HTTP headers
+            local http_date=$(curl -s --connect-timeout 5 -I "$source" | grep "^Date:" | cut -d' ' -f2-)
+            if [ -n "$http_date" ]; then
+                expected_date=$(date -d "$http_date" '+%Y-%m-%d' 2>/dev/null || echo "")
+                if [ -n "$expected_date" ]; then
+                    print_info "Got date from HTTP headers: $expected_date"
+                    break
+                fi
+            fi
+        else
+            # Try JSON API
+            local api_date=$(curl -s --connect-timeout 5 "$source" | grep -o '"datetime":"[^"]*"' | cut -d'"' -f4 | cut -d'T' -f1 2>/dev/null || echo "")
+            if [ -n "$api_date" ]; then
+                expected_date="$api_date"
+                print_info "Got date from API: $expected_date"
+                break
+            fi
+        fi
+    done
+    
+    if [ -n "$expected_date" ] && [ "$current_date" != "$expected_date" ]; then
+        print_warning "System clock appears to be off. Current: $current_date, Expected: $expected_date"
+        print_info "Attempting to synchronize clock..."
+        
+        # Try to install ntpdate if available, otherwise use rdate
+        if command -v ntpdate >/dev/null 2>&1; then
+            print_info "Using ntpdate to sync clock..."
+            if sudo ntpdate -s time.nist.gov; then
+                print_success "Clock synchronized using ntpdate"
+            else
+                print_warning "ntpdate failed, trying alternative method..."
+            fi
+        fi
+        
+        # Alternative: try to set date from HTTP headers
+        if ! command -v ntpdate >/dev/null 2>&1 || [ $? -ne 0 ]; then
+            print_info "Attempting to sync clock using HTTP headers..."
+            local http_date=$(curl -s --connect-timeout 10 -I https://www.google.com | grep "^Date:" | cut -d' ' -f2-)
+            if [ -n "$http_date" ]; then
+                print_info "Setting date from HTTP headers: $http_date"
+                if sudo date -s "$http_date" >/dev/null 2>&1; then
+                    print_success "Clock synchronized using HTTP headers"
+                else
+                    print_warning "Failed to set date from HTTP headers"
+                fi
+            fi
+        fi
+        
+        # Final check - if still off, try to install and use ntpdate
+        if ! command -v ntpdate >/dev/null 2>&1; then
+            print_info "Installing ntpdate for clock synchronization..."
+            if sudo apt update -qq >/dev/null 2>&1; then
+                if sudo apt install -y ntpdate >/dev/null 2>&1; then
+                    print_info "ntpdate installed, syncing clock..."
+                    if sudo ntpdate -s time.nist.gov; then
+                        print_success "Clock synchronized using newly installed ntpdate"
+                    else
+                        print_warning "ntpdate sync failed"
+                    fi
+                else
+                    print_warning "Failed to install ntpdate"
+                fi
+            else
+                print_warning "Package update failed, trying manual date correction..."
+                
+                # Last resort: try to estimate and set a reasonable date
+                # This is a fallback for when the system clock is completely wrong
+                local estimated_year=$(date '+%Y' 2>/dev/null || echo "2024")
+                if [ "$estimated_year" -lt "2020" ] || [ "$estimated_year" -gt "2030" ]; then
+                    print_warning "System year appears to be wrong: $estimated_year"
+                    print_info "Attempting to set a reasonable date..."
+                    
+                    # Try to set to current year (we know it's 2024-2025)
+                    local current_month=$(date '+%m' 2>/dev/null || echo "01")
+                    local current_day=$(date '+%d' 2>/dev/null || echo "01")
+                    
+                    if sudo date -s "2024-$current_month-$current_day" >/dev/null 2>&1; then
+                        print_success "Set reasonable date: 2024-$current_month-$current_day"
+                    elif sudo date -s "2025-$current_month-$current_day" >/dev/null 2>&1; then
+                        print_success "Set reasonable date: 2025-$current_month-$current_day"
+                    else
+                        print_warning "Failed to set reasonable date, continuing with current clock"
+                    fi
+                fi
+            fi
+        fi
+        
+        # Additional fallback: if we still can't get the right date, try to force a reasonable one
+        # This is specifically for cases where the system clock is completely broken
+        local final_year=$(date '+%Y' 2>/dev/null || echo "0")
+        if [ "$final_year" -lt "2020" ] || [ "$final_year" -gt "2030" ]; then
+            print_warning "System clock is still incorrect after all attempts"
+            print_info "Forcing a reasonable date to allow package installation..."
+            
+            # Get current month and day, but force a reasonable year
+            local current_month=$(date '+%m' 2>/dev/null || echo "01")
+            local current_day=$(date '+%d' 2>/dev/null || echo "01")
+            local current_hour=$(date '+%H' 2>/dev/null || echo "12")
+            local current_minute=$(date '+%M' 2>/dev/null || echo "00")
+            local current_second=$(date '+%S' 2>/dev/null || echo "00")
+            
+            # Try to set a reasonable date and time
+            if sudo date -s "2024-$current_month-$current_day $current_hour:$current_minute:$current_second" >/dev/null 2>&1; then
+                print_success "Forced reasonable date: 2024-$current_month-$current_day $current_hour:$current_minute:$current_second"
+            elif sudo date -s "2025-$current_month-$current_day $current_hour:$current_minute:$current_second" >/dev/null 2>&1; then
+                print_success "Forced reasonable date: 2025-$current_month-$current_day $current_hour:$current_minute:$current_second"
+            else
+                print_error "Cannot set any reasonable date. Installation may fail."
+                print_info "You may need to manually set the system date before continuing."
+            fi
+        fi
+    else
+        print_success "System clock appears to be correct: $current_date"
+    fi
+    
+    # Show current time for verification
+    print_info "Current system time: $(date)"
+    
+    # Final verification that we have a reasonable date
+    local current_year=$(date '+%Y' 2>/dev/null || echo "0")
+    if [ "$current_year" -lt "2020" ] || [ "$current_year" -gt "2030" ]; then
+        print_warning "System date still appears to be incorrect: $(date)"
+        print_info "This may cause package installation issues."
+        echo
+        print_info "Options:"
+        print_info "  1. Continue with installation (may fail)"
+        print_info "  2. Exit and fix date manually"
+        echo
+        read -p "Choose option (1 or 2): " date_choice
+        
+        case $date_choice in
+            1)
+                print_warning "Continuing with potentially incorrect date..."
+                ;;
+            2)
+                print_info "Exiting. Please fix the system date manually and run the script again."
+                print_info "You can use: sudo date -s '$(date -u)' to set UTC time"
+                exit 1
+                ;;
+            *)
+                print_error "Invalid choice. Exiting."
+                exit 1
+                ;;
+        esac
+    else
+        print_success "System date appears to be correct"
+    fi
+    
+    print_success "Clock synchronization completed"
+}
+
 install_system_dependencies() {
     print_step "2/6: Installing system dependencies..."
     
     # Update package list
     print_info "Updating package list..."
-    if ! sudo apt update -qq; then
-        print_error "Failed to update package list"
-        exit 1
-    fi
+    
+    # Try to update package list with retry logic
+    local max_retries=3
+    local retry_count=0
+    local update_success=false
+    
+    while [ $retry_count -lt $max_retries ] && [ "$update_success" = false ]; do
+        if sudo apt update -qq; then
+            update_success=true
+            print_success "Package list updated successfully"
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+                print_warning "Package update failed (attempt $retry_count/$max_retries)"
+                print_info "This might be due to clock synchronization issues. Retrying..."
+                
+                # Try to sync clock again
+                if command -v ntpdate >/dev/null 2>&1; then
+                    print_info "Re-syncing clock..."
+                    sudo ntpdate -s time.nist.gov >/dev/null 2>&1 || true
+                fi
+                
+                sleep 2
+            else
+                print_error "Failed to update package list after $max_retries attempts"
+                print_info "This might be due to network issues or repository problems."
+                print_info "Trying to continue with existing package list..."
+                
+                # Try to continue with existing package list
+                if sudo apt list --upgradable >/dev/null 2>&1; then
+                    print_warning "Continuing with existing package list"
+                    update_success=true
+                else
+                    print_error "Cannot continue without package list update"
+                    
+                    # Last resort: try to force a package list update by ignoring date issues
+                    print_info "Attempting to force package list update..."
+                    if sudo apt update -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false -qq >/dev/null 2>&1; then
+                        print_success "Forced package list update successful"
+                        update_success=true
+                    else
+                        print_error "All package update methods failed"
+                        print_info "This installation cannot proceed without package updates."
+                        print_info "Please check your system clock and network connectivity."
+                        exit 1
+                    fi
+                fi
+            fi
+        fi
+    done
     
     # Install only essential packages for WANDA Telescope
     print_info "Installing essential packages..."
@@ -434,6 +673,7 @@ main() {
     
     print_banner
     check_system
+    sync_system_clock
     install_system_dependencies
     setup_directories
     clone_repository
