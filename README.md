@@ -38,7 +38,7 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 The easiest way to get WANDA running on a fresh Raspberry Pi OS Lite:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/fix/rpi5-run/scripts/install.sh | bash
 ```
 
 This single command will:
@@ -55,7 +55,7 @@ This single command will:
 After the system reboots, verify everything is working correctly:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/post-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/fix/rpi5-run/scripts/post-install.sh | bash
 ```
 
 This verification script will:
@@ -68,7 +68,7 @@ This verification script will:
 
 For the original deployment method:
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/fix/rpi5-run/scripts/deploy-to-pi.sh | bash
 ```
 
 ### Manual Setup (Alternative)
