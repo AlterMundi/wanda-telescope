@@ -201,7 +201,7 @@ check_camera_detection() {
 }
 
 check_mount_detection() {
-    print_step "5/5: Checking mount/GPIO detection..."
+    print_step "5/6: Checking mount/GPIO detection..."
     
     # Check if we're on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
@@ -232,6 +232,220 @@ check_mount_detection() {
     print_success "Mount/GPIO detection check completed"
 }
 
+configure_camera_modules() {
+    print_step "6/6: Configuring camera modules..."
+    
+    # Check if we're on Raspberry Pi
+    if [ ! -f /proc/device-tree/model ] || ! grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
+        print_info "Not running on Raspberry Pi - camera configuration not applicable"
+        return 0
+    fi
+    
+    local pi_model=$(cat /proc/device-tree/model)
+    print_info "Detected: $pi_model"
+    
+    # Determine OS version and config file location
+    local config_file=""
+    local os_version=""
+    
+    if [ -f "/etc/os-release" ]; then
+        os_version=$(grep VERSION_CODENAME /etc/os-release | cut -d'=' -f2)
+        print_info "OS Version: $os_version"
+    fi
+    
+    if [ "$os_version" = "bookworm" ]; then
+        config_file="/boot/firmware/config.txt"
+    else
+        config_file="/boot/config.txt"
+    fi
+    
+    if [ ! -f "$config_file" ]; then
+        print_error "Configuration file not found: $config_file"
+        print_info "Cannot proceed with camera configuration"
+        return 1
+    fi
+    
+    print_info "Configuration file: $config_file"
+    
+    # Ask user which camera module they have
+    echo
+    print_info "Camera Module Selection:"
+    print_info "Please select your camera module:"
+    echo
+    print_info "1) ARDUCAM 12MP IMX477 (Native camera)"
+    print_info "2) ARDUCAM UC-955 (Pivariety camera)"
+    print_info "3) Skip camera configuration"
+    echo
+    
+    read -p "Enter your choice (1, 2, or 3): " camera_choice
+    
+    case $camera_choice in
+        1)
+            configure_arducam_imx477 "$config_file"
+            ;;
+        2)
+            configure_arducam_uc955 "$config_file"
+            ;;
+        3)
+            print_info "Skipping camera configuration"
+            return 0
+            ;;
+        *)
+            print_error "Invalid choice. Skipping camera configuration."
+            return 1
+            ;;
+    esac
+}
+
+configure_arducam_imx477() {
+    local config_file="$1"
+    print_info "Configuring ARDUCAM 12MP IMX477 camera..."
+    
+    # Check if required camera packages are installed
+    if ! dpkg -l | grep -q "python3-picamera2\|python3-libcamera"; then
+        print_warning "Required camera packages not detected"
+        print_info "The IMX477 camera requires picamera2 and libcamera packages"
+        print_info "These should have been installed by install.sh, but if not:"
+        print_info "  sudo apt update && sudo apt install -y python3-picamera2 python3-libcamera"
+        echo
+        print_info "After installing the packages, run this script again to configure the camera."
+        return 1
+    fi
+    
+    # Check if configuration is already applied
+    if grep -q "dtoverlay=imx477" "$config_file"; then
+        print_info "IMX477 overlay already configured"
+    else
+        print_info "Adding IMX477 overlay to $config_file..."
+        
+        # Create backup
+        sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # Add camera_auto_detect=0 if not present
+        if ! grep -q "camera_auto_detect=0" "$config_file"; then
+            echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
+            print_info "Added camera_auto_detect=0"
+        fi
+        
+        # Add IMX477 overlay
+        echo "dtoverlay=imx477" | sudo tee -a "$config_file" > /dev/null
+        print_success "Added dtoverlay=imx477"
+        
+        print_warning "Configuration updated. A reboot is required for changes to take effect."
+        print_info "After reboot, the camera should be detected automatically."
+    fi
+    
+    # Show current configuration
+    print_info "Current camera configuration:"
+    grep -E "(camera_auto_detect|dtoverlay=imx477)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
+    
+    # Check if camera is currently detected (may not work until reboot)
+    print_info "Checking current camera detection..."
+    if command -v rpicam-still >/dev/null 2>&1; then
+        local camera_list=$(rpicam-still --list-cameras 2>/dev/null || echo "No cameras detected")
+        print_info "Current camera list: $camera_list"
+    else
+        print_info "rpicam-still not available for testing"
+    fi
+}
+
+configure_arducam_uc955() {
+    local config_file="$1"
+    print_info "Configuring ARDUCAM UC-955 (Pivariety) camera..."
+    
+    # Check if Arducam Pivariety driver is installed
+    if ! dpkg -l | grep -q "arducam-pivariety"; then
+        print_warning "Arducam Pivariety driver not detected"
+        print_info "The UC-955 camera requires the official Arducam Pivariety driver"
+        print_info "Please install it first:"
+        print_info "  curl -sSL https://raw.githubusercontent.com/ArduCAM/Arducam-Pivariety/master/install.sh | bash"
+        echo
+        print_info "After installing the driver, run this script again to configure the camera."
+        return 1
+    fi
+    
+    # Check if configuration is already applied
+    if grep -q "dtoverlay=arducam-pivariety" "$config_file"; then
+        print_info "Arducam Pivariety overlay already configured"
+    else
+        print_info "Adding Arducam Pivariety overlay to $config_file..."
+        
+        # Create backup
+        sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # Add camera_auto_detect=0 if not present
+        if ! grep -q "camera_auto_detect=0" "$config_file"; then
+            echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
+            print_info "Added camera_auto_detect=0"
+        fi
+        
+        # Add Arducam Pivariety overlay
+        echo "dtoverlay=arducam-pivariety" | sudo tee -a "$config_file" > /dev/null
+        print_success "Added dtoverlay=arducam-pivariety"
+        
+        print_warning "Configuration updated. A reboot is required for changes to take effect."
+        print_info "After reboot, the camera should be detected automatically."
+    fi
+    
+    # Show current configuration
+    print_info "Current camera configuration:"
+    grep -E "(camera_auto_detect|dtoverlay=arducam-pivariety)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
+    
+    # Check if camera is currently detected (may not work until reboot)
+    print_info "Checking current camera detection..."
+    if command -v rpicam-still >/dev/null 2>&1; then
+        local camera_list=$(rpicam-still --list-cameras 2>/dev/null || echo "No cameras detected")
+        print_info "Current camera list: $camera_list"
+    else
+        print_info "rpicam-still not available for testing"
+    fi
+}
+
+show_camera_configuration_help() {
+    echo
+    print_info "Camera Configuration Help:"
+    print_info "=========================="
+    
+    if [ "$camera_choice" = "1" ]; then
+        print_info "ARDUCAM 12MP IMX477 Configuration:"
+        print_info "  • Added dtoverlay=imx477 to $config_file"
+        print_info "  • Disabled camera auto-detection"
+        print_info "  • Compatible with Raspberry Pi 5, 4, 3, Zero, and Compute Modules"
+        print_info "  • Supports both Bookworm and Bullseye OS"
+        echo
+        print_info "Next Steps:"
+        print_info "  1. Reboot your Raspberry Pi: sudo reboot"
+        print_info "  2. After reboot, test camera with: rpicam-still --list-cameras"
+        print_info "  3. Take a test photo: rpicam-still -t 5000 -o test.jpg"
+        echo
+        print_info "Documentation: https://docs.arducam.com/Raspberry-Pi-Camera/Native-camera/12MP-IMX477/"
+        
+    elif [ "$camera_choice" = "2" ]; then
+        print_info "ARDUCAM UC-955 (Pivariety) Configuration:"
+        print_info "  • Added dtoverlay=arducam-pivariety to $config_file"
+        print_info "  • Disabled camera auto-detection"
+        print_info "  • High-performance IMX477-based camera"
+        print_info "  • Requires official Arducam Pivariety driver"
+        echo
+        print_info "Next Steps:"
+        print_info "  1. Reboot your Raspberry Pi: sudo reboot"
+        print_info "  2. After reboot, test camera with: rpicam-still --list-cameras"
+        print_info "  3. Take a test photo: rpicam-still -t 5000 -o test.jpg"
+        echo
+        print_info "Documentation: https://docs.arducam.com/Raspberry-Pi-Camera/Pivariety-Camera/Quick-Start-Guide/"
+    fi
+    
+    echo
+    print_info "Troubleshooting:"
+    print_info "  • If camera not detected after reboot, check CSI cable connection"
+    print_info "  • Verify camera is properly seated in CSI connector"
+    print_info "  • Check logs: dmesg | grep -i camera"
+    print_info "  • Ensure camera is powered (Pi camera modules are powered via CSI)"
+    echo
+}
+
 show_verification_summary() {
     print_step "Verification complete!"
     
@@ -244,6 +458,7 @@ show_verification_summary() {
     print_info "  ✓ Web interface tested"
     print_info "  ✓ Camera detection verified"
     print_info "  ✓ Mount/GPIO detection verified"
+    print_info "  ✓ Camera module configuration completed"
     echo
     
     # Get IP address for final display
@@ -264,6 +479,21 @@ show_verification_summary() {
     print_info "  2. Configure camera settings through the web interface"
     print_info "  3. Configure mount settings if using stepper motor control"
     print_info "  4. Test camera capture and mount tracking functionality"
+    
+    # Show camera configuration help if camera was configured
+    if [ -n "$camera_choice" ] && [ "$camera_choice" != "3" ]; then
+        show_camera_configuration_help
+        
+        # Check if reboot is needed for camera configuration
+        if [ "$camera_choice" = "1" ] || [ "$camera_choice" = "2" ]; then
+            echo
+            print_warning "⚠️  IMPORTANT: Camera configuration requires a reboot to take effect!"
+            print_info "After completing this verification, please reboot your Raspberry Pi:"
+            print_info "  sudo reboot"
+            echo
+            print_info "After reboot, your camera should be automatically detected by WANDA Telescope."
+        fi
+    fi
     echo
     print_info "Troubleshooting:"
     print_info "  • Check logs: sudo journalctl -u $SERVICE_NAME -f"
@@ -300,6 +530,7 @@ main() {
     check_web_interface
     check_camera_detection
     check_mount_detection
+    configure_camera_modules
     show_verification_summary
 }
 
