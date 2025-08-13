@@ -64,13 +64,6 @@ This verification script will:
 - ✅ Test camera and mount detection
 - ✅ Provide comprehensive status report
 
-### Legacy Deployment (Alternative)
-
-For the original deployment method:
-```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
-```
-
 ### Manual Setup (Alternative)
 
 If you prefer manual installation:
