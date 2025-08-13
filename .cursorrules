@@ -284,6 +284,254 @@ The camera factory automatically detects cameras in this order:
 - **USB Camera Issues**: Verify UVC driver support and USB port functionality
 - **Detection Problems**: Use `camera/factory.py` detection methods for debugging
 
+## picamera2 Library Deep Dive
+
+### Core Architecture
+The `picamera2` library is the official Python interface for Raspberry Pi cameras, built on top of the `libcamera` stack. It provides high-performance camera access with modern camera APIs.
+
+#### Key Components
+- **Picamera2**: Main camera class that manages camera lifecycle
+- **H264Encoder**: Hardware-accelerated video encoding
+- **FileOutput**: Output handling for file-based operations
+- **Camera Controls**: Real-time parameter adjustment (exposure, gain, etc.)
+
+#### Import Strategy Implementation
+Due to virtual environment limitations, WANDA uses a multi-strategy import approach in `camera/implementations/pi_camera.py`:
+
+```python
+def _import_picamera2(self):
+    """Import picamera2 modules only when needed."""
+    import_strategies = [
+        lambda: (__import__('picamera2').Picamera2, 
+                __import__('picamera2.encoders').H264Encoder, 
+                __import__('picamera2.outputs').FileOutput),
+        lambda: self._import_from_system_path(),
+        lambda: self._import_via_subprocess()
+    ]
+    
+    for i, strategy in enumerate(import_strategies):
+        try:
+            return strategy()
+        except Exception as e:
+            if i == len(import_strategies) - 1:
+                error_msg = f"All import strategies failed: {e}"
+                logger.error(error_msg)
+                raise ImportError(error_msg)
+            logger.warning(f"Import strategy {i+1} failed: {e}")
+```
+
+#### System Path Integration
+The critical fix for virtual environment compatibility:
+
+```python
+def _import_from_system_path(self):
+    """Try to import picamera2 from system Python path."""
+    import sys
+    sys.path.append('/usr/lib/python3/dist-packages')  # Key fix
+    
+    try:
+        from picamera2 import Picamera2
+        from picamera2.encoders import H264Encoder
+        from picamera2.outputs import FileOutput
+        logger.info("picamera2 imported successfully from system path")
+        return Picamera2, H264Encoder, FileOutput
+    except Exception as e:
+        logger.warning(f"System path import strategy failed: {e}")
+        raise ImportError("Could not import picamera2 from system path")
+```
+
+### Camera Lifecycle Management
+
+#### 1. Initialization
+```python
+def initialize(self):
+    """Initialize the camera."""
+    try:
+        # Import picamera2 modules
+        Picamera2, H264Encoder, FileOutput = self._import_picamera2()
+        
+        # Create camera instance
+        self.camera = Picamera2()
+        
+        # Get camera info
+        camera_info = self.camera.global_camera_info()
+        if camera_info:
+            logger.info(f"Camera info: {camera_info}")
+        
+        # Configure preview mode
+        preview_config = self.create_preview_configuration()
+        self.camera.configure(preview_config)
+        
+        # Start camera
+        self.camera.start()
+        self.started = True
+        
+        # Apply initial settings
+        self.update_camera_settings()
+        
+        logger.info("Pi camera initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize Pi camera: {e}")
+        raise
+```
+
+#### 2. Configuration Management
+```python
+def create_preview_configuration(self, main=None):
+    """Create preview configuration for live view."""
+    if not main:
+        main = {"size": (1440, 810)}  # Optimal for web streaming
+    return {"main": main}
+
+def create_still_configuration(self, main=None, raw=None):
+    """Create still image configuration for high-res capture."""
+    if not main:
+        main = {"size": (4056, 3040)}  # Full IMX477 resolution
+    config = {"main": main}
+    if raw:
+        config["raw"] = {"size": (4056, 3040)}
+    return config
+```
+
+#### 3. Frame Capture Methods
+
+##### Live View (High Frame Rate)
+```python
+def get_frame(self):
+    """Get a frame as JPEG data for live streaming."""
+    try:
+        frame = self.capture_array()
+        if frame is not None:
+            # Apply digital gain if enabled
+            if self.use_digital_gain and self.digital_gain > 1.0:
+                frame = np.clip(frame * self.digital_gain, 0, 255).astype(np.uint8)
+            
+            # Convert RGB to BGR for OpenCV
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            
+            # Encode to JPEG
+            _, jpeg = cv2.imencode('.jpg', frame)
+            return jpeg.tobytes()
+    except Exception as e:
+        logger.error(f"Error getting frame: {e}")
+    return None
+```
+
+##### Still Image Capture
+```python
+def capture_array(self, name="main"):
+    """Capture a frame as a numpy array."""
+    if not self.camera:
+        raise Exception("Camera not initialized")
+    
+    try:
+        # Skip frames for exposure adjustment
+        for _ in range(self.skip_frames):
+            pass
+        
+        # Use native picamera2 capture
+        array = self.camera.capture_array(name)
+        return array
+    except Exception as e:
+        logger.error(f"Failed to capture array: {e}")
+        raise
+```
+
+### Performance Optimization
+
+#### Frame Rate Considerations
+- **Live View**: 1440x810 resolution for optimal web streaming performance
+- **Still Capture**: Full 4056x3040 resolution for maximum quality
+- **Skip Frames**: Configurable frame skipping for exposure adjustment
+- **Digital Gain**: Post-processing gain for low-light enhancement
+
+#### Memory Management
+- **Streaming**: Continuous frame capture without memory accumulation
+- **Cleanup**: Proper camera stop/start for configuration changes
+- **State Preservation**: Maintains camera settings across operations
+
+### Error Handling and Fallbacks
+
+#### Import Failures
+1. **Direct Import**: Try standard Python import
+2. **System Path**: Add `/usr/lib/python3/dist-packages` to sys.path
+3. **Subprocess Fallback**: Use rpicam commands as last resort
+
+#### Hardware Failures
+- **Camera Unavailable**: Falls back to USB camera or mock camera
+- **Configuration Errors**: Logs detailed error information
+- **State Recovery**: Attempts to restore camera to working state
+
+### Development Best Practices
+
+#### 1. Always Test Import Strategy
+```python
+# Test picamera2 availability before implementation
+try:
+    from picamera2 import Picamera2
+    HAS_PICAMERA2 = True
+except ImportError:
+    HAS_PICAMERA2 = False
+```
+
+#### 2. Use Native Methods When Possible
+```python
+# Preferred: Native picamera2 methods
+frame = self.camera.capture_array()
+
+# Avoid: Subprocess alternatives (slower, less reliable)
+# subprocess.run(['rpicam-still', '--output', '-'])
+```
+
+#### 3. Handle Configuration Changes Properly
+```python
+def update_camera_settings(self):
+    """Update camera settings without stopping stream."""
+    if self.camera and self.started:
+        try:
+            self.camera.set_controls({
+                "ExposureTime": self.exposure_time,
+                "AnalogueGain": self.analogue_gain
+            })
+        except Exception as e:
+            logger.warning(f"Failed to update camera settings: {e}")
+```
+
+#### 4. Monitor Performance
+```python
+import time
+
+def benchmark_capture(self, num_frames=100):
+    """Benchmark frame capture performance."""
+    start_time = time.time()
+    for _ in range(num_frames):
+        frame = self.capture_array()
+    end_time = time.time()
+    
+    fps = num_frames / (end_time - start_time)
+    logger.info(f"Capture performance: {fps:.2f} FPS")
+    return fps
+```
+
+### Troubleshooting Common Issues
+
+#### Import Errors
+- **ModuleNotFoundError**: Check if system packages are installed
+- **Version Conflicts**: Ensure numpy compatibility between venv and system
+- **Path Issues**: Verify `/usr/lib/python3/dist-packages` exists
+
+#### Performance Issues
+- **Low Frame Rate**: Check resolution settings and skip_frames
+- **High Memory Usage**: Monitor frame cleanup and streaming patterns
+- **Configuration Delays**: Minimize camera stop/start cycles
+
+#### Hardware Issues
+- **Camera Not Detected**: Verify CSI cable connection and device tree overlays
+- **Configuration Failures**: Check camera permissions and libcamera status
+- **Streaming Problems**: Test with rpicam-vid command line tool
+
 ## Additional Notes
 - Comment critical logic (e.g., coordinate calculations, motor timing) with purpose and context.
 - Use docstrings for Python functions/classes and inline comments for Arduino.

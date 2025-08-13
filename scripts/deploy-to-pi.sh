@@ -266,13 +266,8 @@ setup_python_environment() {
         fi
     fi
     
-    # Install additional dependencies for Pi camera
-    if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-        print_info "Installing Pi camera dependencies..."
-        if ! "$pip_path" install picamera2; then
-            print_warning "Failed to install picamera2 - will use mock camera"
-        fi
-    fi
+    # Note: Pi camera dependencies (picamera2, libcamera) are installed as system packages above
+    # The virtual environment will access them via sys.path modification in the code
     
     print_success "Python environment setup completed"
 }
