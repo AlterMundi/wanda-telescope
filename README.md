@@ -33,12 +33,12 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 
 ## Quick Start
 
-### One-Command Deployment (Recommended)
+### One-Command Installation (Recommended)
 
 The easiest way to get WANDA running on a fresh Raspberry Pi OS Lite:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/install.sh | bash
 ```
 
 This single command will:
@@ -47,8 +47,29 @@ This single command will:
 - ✅ Set up Python virtual environment
 - ✅ Install all Python dependencies
 - ✅ Configure systemd service for auto-startup
-- ✅ Start WANDA Telescope automatically
+- ✅ Automatically reboot to start WANDA Telescope
 - ✅ Enable auto-startup on boot
+
+### Post-Installation Verification
+
+After the system reboots, verify everything is working correctly:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/post-install.sh | bash
+```
+
+This verification script will:
+- ✅ Check service status and logs
+- ✅ Verify web interface accessibility
+- ✅ Test camera and mount detection
+- ✅ Provide comprehensive status report
+
+### Legacy Deployment (Alternative)
+
+For the original deployment method:
+```bash
+curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/deploy-to-pi.sh | bash
+```
 
 ### Manual Setup (Alternative)
 
@@ -272,7 +293,9 @@ wanda-telescope/
 │   ├── integration/          # Integration tests
 │   └── web/                  # Web interface tests
 └── scripts/                   # Deployment and utility scripts
-    ├── deploy-to-pi.sh       # One-command deployment
+    ├── install.sh            # One-command installation
+    ├── post-install.sh       # Post-installation verification
+    ├── deploy-to-pi.sh       # Legacy one-command deployment
     ├── install-service.sh     # Service installation
     └── run-wanda.sh          # Development runner
 ```
