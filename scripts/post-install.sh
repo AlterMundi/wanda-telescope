@@ -259,7 +259,16 @@ configure_arducam_imx477() {
         print_info "dtoverlay=imx477 already present"
     fi
     
-    print_success "IMX-477 configuration completed (2 lines modified as per official Arducam guide)"
+    # Add CMA memory configuration for high-resolution camera support
+    if ! grep -q "^dtoverlay=cma" "$config_file"; then
+        echo "dtoverlay=cma,cma-256" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added CMA memory allocation (256MB) for camera buffer support"
+    else
+        print_info "CMA configuration already present"
+    fi
+    
+    print_success "IMX-477 configuration completed (3 lines modified as per official Arducam guide)"
+    print_info "Added CMA memory allocation to prevent DMA buffer allocation failures"
     print_info "After reboot, verify with: rpicam-still --list-cameras"
 }
 
@@ -294,7 +303,16 @@ configure_arducam_uc955() {
         fi
     fi
     
-    print_success "UC-955 (IMX462 Pivariety) configuration applied (3 lines modified)"
+    # Add CMA memory configuration for high-resolution camera support
+    if ! grep -q "^dtoverlay=cma" "$config_file"; then
+        echo "dtoverlay=cma,cma-256" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added CMA memory allocation (256MB) for camera buffer support"
+    else
+        print_info "CMA configuration already present"
+    fi
+    
+    print_success "UC-955 (IMX462 Pivariety) configuration applied (4 lines modified)"
+    print_info "Added CMA memory allocation to prevent DMA buffer allocation failures"
 }
 
 install_arducam_drivers() {
