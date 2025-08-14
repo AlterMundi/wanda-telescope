@@ -121,10 +121,15 @@ check_web_interface() {
     print_step "3/5: Checking web interface accessibility..."
     
     # Get local IP address
-    local ip_address=$(hostname -I | awk '{print $1}')
+    local ip_address
+    ip_address=$(hostname -I | awk '{print $1}')
     if [ -z "$ip_address" ]; then
-        print_error "Could not determine IP address"
-        exit 1
+        # Try alternative method
+        ip_address=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || echo "")
+        if [ -z "$ip_address" ]; then
+            print_warning "Could not determine IP address"
+            ip_address="localhost"
+        fi
     fi
     
     print_info "Local IP address: $ip_address"
@@ -247,9 +252,16 @@ show_verification_summary() {
     echo
     
     # Get IP address for final display
-    local ip_address=$(hostname -I | awk '{print $1}')
+    local ip_address
+    ip_address=$(hostname -I | awk '{print $1}')
+    if [ -z "$ip_address" ]; then
+        # Try alternative method
+        ip_address=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || echo "")
+    fi
     if [ -n "$ip_address" ]; then
         print_success "🌐 WANDA Telescope is accessible at: http://$ip_address:$WEB_PORT"
+    else
+        print_success "🌐 WANDA Telescope is accessible at: http://localhost:$WEB_PORT"
     fi
     
     echo

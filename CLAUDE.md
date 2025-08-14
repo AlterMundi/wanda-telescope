@@ -10,11 +10,14 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 
 ### Running the Application
 ```bash
-# Automated setup and run (recommended)
-./run-wanda.sh
-
-# Manual run (if virtual environment already exists)
+# Create virtual environment if not exists
+python3 -m venv venv
 source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
 python main.py
 ```
 
@@ -23,32 +26,39 @@ python main.py
 # Run all tests
 pytest
 
+# Run with coverage report
+pytest --cov=camera,mount,web,utils,session --cov-report=term-missing
+
 # Run specific test categories
 pytest tests/unit/          # Unit tests only
 pytest tests/integration/   # Integration tests only
 pytest tests/web/          # Web interface tests only
 
-# Run with coverage
-pytest --cov=camera,mount,web,utils
-
 # Run a single test file
-pytest tests/unit/test_camera_base.py
+pytest tests/unit/test_camera/test_camera_factory.py
 
 # Run a specific test
-pytest tests/unit/test_camera_base.py::test_abstract_camera_interface
+pytest tests/unit/test_camera/test_camera_factory.py::test_factory_creates_mock_camera
+
+# Run tests with verbose output
+pytest -v
+
+# Run tests and stop on first failure
+pytest -x
 ```
 
 ### Development Environment
 ```bash
-# Create virtual environment manually
-python3 -m venv venv
-source venv/bin/activate
+# Install development dependencies
+pip install pytest pytest-cov pytest-mock pytest-flask responses
 
-# Install dependencies
-pip install -r requirements.txt
+# Force mock camera (useful for development without hardware)
+export MOCK_CAMERA=1
+python main.py
 
-# Install development dependencies (for testing)
-pip install pytest pytest-cov
+# Check code coverage
+pytest --cov=camera,mount,web,utils,session --cov-report=html
+# Open htmlcov/index.html in browser
 ```
 
 ## Architecture
@@ -58,169 +68,159 @@ pip install pytest pytest-cov
 1. **Factory Pattern**: Camera and Mount factories auto-detect hardware and create appropriate implementations
    - `camera/factory.py`: CameraFactory.create_camera() → PiCamera | USBCamera | MockCamera
    - `mount/factory.py`: MountFactory.create_mount() → PiMount | MockMount
+   - Detection priority: Pi hardware → USB hardware → Mock fallback
 
 2. **Abstract Base Classes**: Define interfaces for hardware components
-   - `camera/base.py`: AbstractCamera - all cameras must implement this interface
-   - `mount/base.py`: Abstract mount interface for tracking control
+   - `camera/base.py`: AbstractCamera - all cameras must implement capture_image, capture_video, etc.
+   - `mount/base.py`: AbstractMount - defines tracking control interface
+   - Ensures consistent API across different hardware implementations
 
 3. **Hardware Abstraction**: Mock implementations allow development without Raspberry Pi hardware
    - Development mode automatically falls back to mocks when Pi hardware unavailable
    - `dev_tools/` contains mock implementations of picamera2 and RPi.GPIO
+   - Full feature parity with real hardware for testing
 
 ### Key Components
 
 **Camera System** (`camera/`):
+- Factory pattern with automatic hardware detection
 - Supports Raspberry Pi HQ Camera (IMX-477), Arducam UC-955 (Pivariety), USB webcams, and mock cameras
-- Automatic camera detection and fallback (Pi → USB → Mock)
-- Advanced exposure control, ISO adjustment, night vision mode
+- Advanced exposure control (1/10000s to 200s), ISO adjustment (20-1600), night vision mode
 - State preservation for non-intrusive operation
+- Thread-safe capture operations with retry logic
 
 **Mount Control** (`mount/`):
-- Stepper motor control for equatorial tracking
-- Configurable tracking speed for sidereal rate
+- Stepper motor control for equatorial tracking via GPIO pins
+- Configurable tracking speed for sidereal rate (3.523 default)
 - Thread-safe operation with graceful shutdown
+- Step sequences defined in `config.py`
 
 **Session Management** (`session/`):
 - Automated capture sessions with progress tracking
 - Thread-based implementation for non-blocking operation
 - JSON metadata export for each session
+- Handles both photo and video capture sessions
 
 **Web Interface** (`web/`):
-- Flask-based REST API with AJAX frontend
-- Real-time camera feed via MJPEG streaming
-- Responsive design with collapsible control panels
+- Flask-based REST API serving HTML/JS frontend
+- Real-time camera feed via MJPEG streaming at `/video_feed`
+- AJAX-based control for responsive UI
+- Collapsible control panels for camera, mount, and session management
+
+**Storage Management** (`utils/storage.py`):
+- Intelligent storage hierarchy with automatic fallback
+- Priority: USB drive (/media/*) → Home directory (~/wanda_captures) → Current directory
+- Automatic directory creation and permission handling
 
 ## Important Implementation Details
 
 ### Camera State Management
 The camera system preserves state to avoid disrupting other applications:
-- Camera controls are restored to original values after use
+- Original camera controls saved before modification
+- Camera controls restored to original values after use
 - Proper cleanup on application shutdown via signal handlers
 - Thread-safe operations for concurrent access
 
-### Storage Hierarchy
-Storage locations are checked in order:
-1. USB drive (if mounted at /media/*)
-2. User home directory (~/wanda_captures)
-3. Current directory fallback
+### Error Handling Architecture
+- Custom exceptions in `camera/exceptions.py` and `session/exceptions.py`
+- Mount exceptions follow similar pattern (though not in separate file)
+- Web routes return appropriate HTTP status codes (200, 400, 500) with JSON error messages
+- Comprehensive error logging throughout the application
 
-### Error Handling
-- Camera exceptions in `camera/exceptions.py`
-- Mount exceptions follow similar pattern
-- Web routes return appropriate HTTP status codes with error messages
+### Threading Model
+- Mount tracking runs in separate thread for continuous operation
+- Session controller uses threads for non-blocking captures
+- Web server uses threaded=True for concurrent request handling
+- Proper thread cleanup on application shutdown
 
 ### Testing Strategy
-- Comprehensive fixtures in `tests/conftest.py`
-- Mock hardware for CI/CD compatibility
+- Comprehensive fixtures in `tests/conftest.py` for reusable test components
+- Mock hardware implementations for CI/CD compatibility
+- Unit tests for individual components
 - Integration tests verify component interactions
-- Web tests use Flask test client
+- Web tests use Flask test client for endpoint testing
 
 ## Configuration
 
 Main configuration in `config.py`:
-- Camera settings (resolution, exposure limits, gain ranges)
-- Mount settings (GPIO pins, step sequences, tracking speeds)
-- Storage paths and web server settings
-- All settings have sensible defaults
+- **Camera settings**: 
+  - PREVIEW_SIZE = (1440, 810) - 16:9 aspect ratio
+  - STILL_SIZE = (4056, 2282) - Maximum resolution 16:9
+  - VIDEO_SIZE = (1920, 1080) - Full HD
+  - DEFAULT_EXPOSURE_US = 10000 (10ms)
+- **Mount settings**: 
+  - MOTOR_PINS = [23, 24, 25, 8] - GPIO pins
+  - 8-step sequence for smooth motor control
+  - DEFAULT_SIDEREAL_DELAY = 3.523
+- **Storage paths**: 
+  - USB_BASE = "/media/astro1"
+  - HOME_BASE = "/home/astro1/wanda_captures"
+- **Web server**: 
+  - HOST = '0.0.0.0' (all interfaces)
+  - PORT = 5000
+
+## Development Guidelines (from .cursorrules)
+
+### Test-Driven Development (TDD) - MANDATORY
+1. **Write failing test first** - Define expected behavior
+2. **Write minimal code** - Make the test pass
+3. **Refactor** - Improve code while keeping tests green
+4. **Test coverage requirement**: Minimum 85% for new code
+
+### Code Quality Standards
+- **Simplicity**: Clear, maintainable code over complex abstractions
+- **No duplication**: Reuse existing utilities and constants
+- **File size**: Keep under 300 lines where possible
+- **Only implement requested changes** - No unsolicited improvements
 
 ## Development Tips
 
 1. **Running without hardware**: The application automatically uses mock implementations when Pi hardware is unavailable
-2. **Camera testing**: Use MOCK_CAMERA environment variable to force mock camera even on Pi
+2. **Camera testing**: Use `MOCK_CAMERA=1` environment variable to force mock camera even on Pi
 3. **Mount testing**: Mock mount allows testing tracking logic without stepper motor
 4. **Web development**: Frontend uses vanilla JavaScript with AJAX for simplicity
 5. **Session testing**: Mock implementations support full session workflows
+6. **Debugging camera detection**: Check `camera/factory.py` logs for detection process
+7. **Testing specific components**: Use pytest markers or specific test paths
 
-## Camera Hardware Support
+## API Endpoints
 
-WANDA supports multiple camera types through its factory pattern. The system automatically detects and uses the best available camera in this order: Pi Camera → USB Camera → Mock Camera.
+### Camera Control
+- `POST /capture_still` - Capture a photo
+- `POST /start_video` - Start video recording  
+- `POST /stop_video` - Stop video recording
+- `GET /capture_status` - Get current capture status
+- `GET /video_feed` - MJPEG stream for live preview
 
-### 1. Raspberry Pi Camera (PiCamera)
-**Supported Models:**
-- **Raspberry Pi HQ Camera (IMX-477)**: Official Pi camera module
-- **Arducam UC-955 (Pivariety)**: High-performance IMX477-based camera
-- **Other Pi-compatible cameras**: Any camera using the CSI interface
+### Mount Control
+- `POST /start_tracking` - Start mount tracking with specified parameters
+- `POST /stop_tracking` - Stop mount tracking
 
-**Features:**
-- Native libcamera/picamera2 integration
-- Advanced exposure control and gain adjustment
-- Night vision mode with enhanced sensitivity
-- State preservation for non-intrusive operation
-- Retry logic with detailed error diagnostics
+### Session Management
+- `POST /start_session` - Start automated capture session
+- `POST /stop_session` - Stop current session
+- `GET /session_status` - Get session progress and status
 
-**Setup Requirements:**
-- Raspberry Pi 5 (recommended) or Pi 4
-- Raspberry Pi OS Bookworm
-- CSI camera ribbon cable connection
-- libcamera and picamera2 packages
-
-### 2. Arducam UC-955 (Pivariety) Specific Setup
-For Arducam UC-955 camera modules, special driver installation is required. See `docs/ARDUCAM_UC955_SETUP.md` for complete setup instructions including:
-- Official Arducam Pivariety driver installation
-- Device tree overlay configuration (`dtoverlay=arducam-pivariety`)
-- Required tuning file setup for libcamera compatibility
-- Verification and troubleshooting steps
-
-**Specifications:**
-- Resolution: 1920x1080 @ 60fps
-- Color depth: 10-bit RGGB
-- Interface: CSI-2 via ribbon cable
-- Integration: Seamless with WANDA's camera factory system
-
-### 3. USB Camera (USBCamera)
-**Supported Models:**
-- Any USB webcam with UVC (USB Video Class) support
-- Logitech, Microsoft, generic USB cameras
-- USB 2.0 and USB 3.0 cameras
-
-**Features:**
-- OpenCV-based capture with MJPG format support
-- Automatic resolution detection (1280x720 default)
-- Exposure and gain control via camera properties
-- Performance mode optimization
-- Hardware state preservation
-
-**Setup Requirements:**
-- USB camera connected to any USB port
-- OpenCV with video capture support
-- UVC driver support (standard on Linux)
-
-**Configuration:**
-- Default resolution: 1280x720
-- MJPG format for better performance
-- Enhanced brightness for better visibility
-- Automatic fallback if Pi camera unavailable
-
-### 4. Mock Camera (MockCamera)
-**Purpose:**
-- Development and testing without hardware
-- CI/CD pipeline compatibility
-- Demo and presentation purposes
-
-**Features:**
-- Generates synthetic image data or uses webcam if available
-- Full API compatibility with real cameras
-- Configurable exposure and gain simulation
-- Night vision mode simulation
-- No hardware dependencies
-
-**Usage:**
-- Automatically used when no physical camera is detected
-- Can be forced with `MOCK_CAMERA` environment variable
-- Perfect for development and testing workflows
+## Hardware Support Details
 
 ### Camera Detection Priority
-The camera factory automatically detects cameras in this order:
-1. **Pi Camera**: Highest priority for optimal performance
-2. **USB Camera**: Fallback for non-Pi systems or additional cameras
-3. **Mock Camera**: Development and testing fallback
+1. **Raspberry Pi Camera** (via CSI interface)
+   - Detected using picamera2 library availability
+   - Supports IMX477 and Pivariety cameras
+   - Requires libcamera and picamera2 packages
 
-### Hardware Requirements Summary
-- **Pi Camera**: Raspberry Pi with CSI interface
-- **USB Camera**: Any system with USB ports and UVC support
-- **Mock Camera**: No hardware requirements (development only)
+2. **USB Camera** (via OpenCV)
+   - Detected using cv2.VideoCapture
+   - Supports any UVC-compatible webcam
+   - Uses MJPG format for better performance
 
-### Troubleshooting
-- **Pi Camera Issues**: Check CSI cable connection and libcamera installation
-- **USB Camera Issues**: Verify UVC driver support and USB port functionality
-- **Detection Problems**: Use `camera/factory.py` detection methods for debugging
+3. **Mock Camera** (development fallback)
+   - Automatically used when no hardware detected
+   - Generates synthetic images or uses local webcam
+   - Full API compatibility for testing
+
+### Mount Hardware
+- Stepper motor control via RPi.GPIO
+- 4-wire bipolar stepper motor support
+- GPIO pins configurable in config.py
+- Mock mount for development without hardware

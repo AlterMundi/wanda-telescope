@@ -349,15 +349,17 @@ install_system_dependencies() {
         fi
     done
     
-    # Upgrade existing packages
+    # Upgrade existing packages (with non-interactive mode to avoid prompts)
     print_info "Upgrading existing packages..."
-    if sudo apt upgrade -y -qq; then
+    export DEBIAN_FRONTEND=noninteractive
+    if sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq --no-install-recommends; then
         print_success "System packages upgraded successfully"
     else
         print_warning "Some packages could not be upgraded - continuing with installation"
         # Try to fix any broken packages
         sudo apt --fix-broken install -y >/dev/null 2>&1 || true
     fi
+    unset DEBIAN_FRONTEND
     
     # Install only essential packages for WANDA Telescope
     print_info "Installing essential packages..."
@@ -434,25 +436,59 @@ clone_repository() {
     
     if [ -d "$PROJECT_DIR/.git" ]; then
         print_info "Repository exists, updating..."
-        if ! git fetch origin; then
-            print_error "Failed to fetch from origin"
-            exit 1
+        cd "$PROJECT_DIR" || exit 1
+        
+        # Try to fetch with retry logic for network issues
+        local fetch_success=false
+        for i in 1 2 3; do
+            if git fetch origin 2>/dev/null; then
+                fetch_success=true
+                break
+            else
+                print_warning "Fetch attempt $i failed, retrying..."
+                sleep 2
+            fi
+        done
+        
+        if [ "$fetch_success" = false ]; then
+            print_error "Failed to fetch from origin after 3 attempts"
+            print_info "Continuing with existing repository..."
+        else
+            if ! git checkout "$BRANCH" 2>/dev/null; then
+                print_warning "Failed to checkout branch: $BRANCH"
+                print_info "Attempting to reset to origin/$BRANCH..."
+                git reset --hard "origin/$BRANCH" 2>/dev/null || true
+            fi
+            if ! git pull origin "$BRANCH" 2>/dev/null; then
+                print_warning "Failed to pull from origin"
+                print_info "Repository may already be up to date"
+            fi
+            print_success "Repository updated"
         fi
-        if ! git checkout "$BRANCH"; then
-            print_error "Failed to checkout branch: $BRANCH"
-            exit 1
-        fi
-        if ! git pull origin "$BRANCH"; then
-            print_error "Failed to pull from origin"
-            exit 1
-        fi
-        print_success "Repository updated"
     else
         print_info "Cloning repository..."
-        if ! git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"; then
-            print_error "Failed to clone repository"
+        # Remove any existing directory first
+        rm -rf "$PROJECT_DIR" 2>/dev/null || true
+        
+        # Try to clone with retry logic
+        local clone_success=false
+        for i in 1 2 3; do
+            if git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR" 2>/dev/null; then
+                clone_success=true
+                break
+            else
+                print_warning "Clone attempt $i failed, retrying..."
+                rm -rf "$PROJECT_DIR" 2>/dev/null || true
+                sleep 3
+            fi
+        done
+        
+        if [ "$clone_success" = false ]; then
+            print_error "Failed to clone repository after 3 attempts"
+            print_info "This may be due to network issues or GitHub rate limiting"
             exit 1
         fi
+        
         if ! cd "$PROJECT_DIR"; then
             print_error "Failed to change to project directory after clone"
             exit 1
@@ -613,32 +649,6 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-# Check if this is a reinstallation
-if [ -d "$HOME/wanda-telescope" ] || sudo systemctl list-unit-files | grep -q "wanda-telescope"; then
-    print_warning "WANDA Telescope appears to be already installed!"
-    echo
-    print_info "Options:"
-    print_info "  1. Clean reinstall (remove existing installation and start fresh)"
-    print_info "  2. Exit and keep existing installation"
-    echo
-    read -p "Choose option (1 or 2): " choice
-    
-    case $choice in
-        1)
-            print_info "Performing clean reinstall..."
-            cleanup_existing_installation
-            ;;
-        2)
-            print_info "Exiting. No changes made."
-            exit 0
-            ;;
-        *)
-            print_error "Invalid choice. Exiting."
-            exit 1
-            ;;
-    esac
-fi
-
 # Cleanup function for existing installations
 cleanup_existing_installation() {
     print_info "Cleaning up existing WANDA installation..."
@@ -675,6 +685,32 @@ cleanup_existing_installation() {
     print_success "Cleanup completed. Ready for fresh installation."
     echo
 }
+
+# Check if this is a reinstallation
+if [ -d "$HOME/wanda-telescope" ] || sudo systemctl list-unit-files | grep -q "wanda-telescope"; then
+    print_warning "WANDA Telescope appears to be already installed!"
+    echo
+    print_info "Options:"
+    print_info "  1. Clean reinstall (remove existing installation and start fresh)"
+    print_info "  2. Exit and keep existing installation"
+    echo
+    read -p "Choose option (1 or 2): " choice
+    
+    case $choice in
+        1)
+            print_info "Performing clean reinstall..."
+            cleanup_existing_installation
+            ;;
+        2)
+            print_info "Exiting. No changes made."
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+fi
 
 # Main installation process
 main() {
