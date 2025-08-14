@@ -35,7 +35,16 @@ print_step() {
 }
 
 # Configuration
-PROJECT_DIR="$HOME/wanda-telescope"
+# Determine the actual project directory dynamically
+if [ -f "$0" ]; then
+    # Script is being run directly, find project root
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+else
+    # Fallback to home directory
+    PROJECT_DIR="$HOME/wanda-telescope"
+fi
+
 SERVICE_NAME="wanda-telescope"
 WEB_PORT=5000
 
@@ -293,6 +302,8 @@ configure_camera_modules() {
     
     print_info "Configuration file: $config_file"
     
+    # No need to check for external config files - we'll generate them automatically
+    
     # Ask user which camera module they have
     echo
     print_info "Camera Module Selection:"
@@ -348,18 +359,66 @@ configure_arducam_imx477() {
         sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         
-        # Check if sensor config file exists
-        local sensor_config="$PROJECT_DIR/sensor-configs/config-for-IMX477.txt"
-        if [ ! -f "$sensor_config" ]; then
-            print_error "Sensor configuration file not found: $sensor_config"
-            print_info "Cannot proceed with camera configuration"
-            return 1
-        fi
+        # Generate IMX477 configuration automatically
+        print_info "Generating IMX477 configuration..."
         
-        # Apply the complete sensor configuration
-        print_info "Applying complete IMX477 configuration..."
-        if sudo cp "$sensor_config" "$config_file"; then
-            print_success "IMX477 configuration applied successfully"
+        # Create the configuration content
+        local config_content="# For more options and information see
+# http://rptl.io/configtxt
+# Some settings may impact device functionality. See link above for details
+
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+
+# Enable audio (loads snd_bcm2835)
+dtparam=audio=on
+
+# Additional overlays and parameters are documented
+# /boot/firmware/overlays/README
+
+# Automatically load overlays for detected cameras
+camera_auto_detect=0
+
+# Automatically load overlays for detected DSI displays
+display_auto_detect=1
+
+# Automatically load initramfs files, if found
+auto_initramfs=1
+
+# Enable DRM VC4 V3D driver
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# Don't have the firmware create an initial video= setting in cmdline.txt.
+# Use the kernel's default instead.
+disable_fw_kms_setup=1
+
+# Run in 64-bit mode
+arm_64bit=1
+
+# Disable compensation for displays with overscan
+disable_overscan=1
+
+# Run as fast as firmware / board allows
+arm_boost=1
+
+[cm4]
+# Enable host mode on the 2711 built-in XHCI USB controller.
+# This line should be removed if the legacy DWC2 controller is required
+# (e.g. for USB device mode) or if USB support is not required.
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+dtoverlay=imx477"
+
+        # Apply the generated configuration
+        if echo "$config_content" | sudo tee "$config_file" > /dev/null; then
+            print_success "IMX477 configuration generated and applied successfully"
         else
             print_error "Failed to apply IMX477 configuration"
             return 1
@@ -452,18 +511,66 @@ configure_arducam_uc955() {
         sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         
-        # Check if sensor config file exists
-        local sensor_config="$PROJECT_DIR/sensor-configs/config-for-UC955.txt"
-        if [ ! -f "$sensor_config" ]; then
-            print_error "Sensor configuration file not found: $sensor_config"
-            print_info "Cannot proceed with camera configuration"
-            return 1
-        fi
+        # Generate UC-955 configuration automatically
+        print_info "Generating UC-955 configuration..."
         
-        # Apply the complete sensor configuration
-        print_info "Applying complete UC-955 configuration..."
-        if sudo cp "$sensor_config" "$config_file"; then
-            print_success "UC-955 configuration applied successfully"
+        # Create the configuration content
+        local config_content="# For more options and information see
+# http://rptl.io/configtxt
+# Some settings may impact device functionality. See link above for details
+
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+
+# Enable audio (loads snd_bcm2835)
+dtparam=audio=on
+
+# Additional overlays and parameters are documented
+# /boot/firmware/overlays/README
+
+# Automatically load overlays for detected cameras
+camera_auto_detect=0
+
+# Automatically load overlays for detected DSI displays
+display_auto_detect=1
+
+# Automatically load initramfs files, if found
+auto_initramfs=1
+
+# Enable DRM VC4 V3D driver
+#dtoverlay=vc4-kms-v3d
+dtoverlay=arducam-pivariety
+max_framebuffers=2
+
+# Don't have the firmware create an initial video= setting in cmdline.txt.
+# Use the kernel's default instead.
+disable_fw_kms_setup=1
+
+# Run in 64-bit mode
+arm_64bit=1
+
+# Disable compensation for displays with overscan
+disable_overscan=1
+
+# Run as fast as firmware / board allows
+arm_boost=1
+
+[cm4]
+# Enable host mode on the 2711 built-in XHCI USB controller.
+# This line should be removed if the legacy DWC2 controller is required
+# (e.g. for USB device mode) or if USB support is not required.
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]"
+
+        # Apply the generated configuration
+        if echo "$config_content" | sudo tee "$config_file" > /dev/null; then
+            print_success "UC-955 configuration generated and applied successfully"
         else
             print_error "Failed to apply UC-955 configuration"
             return 1
@@ -590,7 +697,7 @@ show_camera_configuration_help() {
     
     if [ "$camera_choice" = "1" ]; then
         print_info "ARDUCAM 12MP IMX477 Configuration:"
-        print_info "  • Applied complete IMX477 configuration from sensor-configs/config-for-IMX477.txt"
+        print_info "  • Generated and applied complete IMX477 configuration automatically"
         print_info "  • Includes optimized settings for Raspberry Pi 5, 4, 3, Zero, and Compute Modules"
         print_info "  • Supports both Bookworm and Bullseye OS"
         echo
@@ -603,7 +710,7 @@ show_camera_configuration_help() {
         
     elif [ "$camera_choice" = "2" ]; then
         print_info "ARDUCAM UC-955 (Pivariety) Configuration:"
-        print_info "  • Applied complete UC-955 configuration from sensor-configs/config-for-UC955.txt"
+        print_info "  • Generated and applied complete UC-955 configuration automatically"
         print_info "  • Includes optimized settings for high-performance IMX477-based camera"
         print_info "  • Requires official Arducam Pivariety driver"
         echo
