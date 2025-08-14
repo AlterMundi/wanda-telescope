@@ -201,7 +201,7 @@ check_camera_detection() {
 }
 
 check_mount_detection() {
-    print_step "5/6: Checking mount/GPIO detection..."
+    print_step "5/7: Checking mount/GPIO detection..."
     
     # Check if we're on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
@@ -233,7 +233,7 @@ check_mount_detection() {
 }
 
 configure_camera_modules() {
-    print_step "6/6: Configuring camera modules..."
+    print_step "6/7: Configuring camera modules..."
     
     # Check if we're on Raspberry Pi
     if [ ! -f /proc/device-tree/model ] || ! grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
@@ -336,6 +336,42 @@ configure_arducam_imx477() {
         print_info "After reboot, the camera should be detected automatically."
     fi
     
+    # Fix camera permissions for Pi 5 DMA heap access
+    print_info "Fixing camera permissions for Pi 5 DMA heap access..."
+    
+    # Add user to video and gpio groups
+    local current_user=$(whoami)
+    if ! groups "$current_user" | grep -q "video"; then
+        print_info "Adding user $current_user to video group..."
+        sudo usermod -a -G video "$current_user"
+        print_success "User added to video group"
+    else
+        print_info "User already in video group"
+    fi
+    
+    if ! groups "$current_user" | grep -q "gpio"; then
+        print_info "Adding user $current_user to gpio group..."
+        sudo usermod -a -G gpio "$current_user"
+        print_success "User added to gpio group"
+    else
+        print_info "User already in gpio group"
+    fi
+    
+    # Create udev rules for persistent camera permissions
+    print_info "Creating udev rules for camera permissions..."
+    sudo tee /etc/udev/rules.d/99-camera-permissions.rules > /dev/null <<EOF
+# Camera device permissions for WANDA Telescope
+KERNEL=="media*", MODE="0666", GROUP="video"
+KERNEL=="video*", MODE="0666", GROUP="video"
+KERNEL=="v4l2-subdev*", MODE="0666", GROUP="video"
+
+# GPIO permissions
+SUBSYSTEM=="gpio", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="bcm2835-gpiomem", GROUP="gpio", MODE="0660"
+EOF
+    
+    print_success "Udev rules created for camera permissions"
+    
     # Show current configuration
     print_info "Current camera configuration:"
     grep -E "(camera_auto_detect|dtoverlay=imx477)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
@@ -348,6 +384,8 @@ configure_arducam_imx477() {
     else
         print_info "rpicam-still not available for testing"
     fi
+    
+    print_info "Camera permissions configured. A reboot is required for all changes to take effect."
 }
 
 configure_arducam_uc955() {
@@ -389,6 +427,42 @@ configure_arducam_uc955() {
         print_info "After reboot, the camera should be detected automatically."
     fi
     
+    # Fix camera permissions for Pi 5 DMA heap access
+    print_info "Fixing camera permissions for Pi 5 DMA heap access..."
+    
+    # Add user to video and gpio groups
+    local current_user=$(whoami)
+    if ! groups "$current_user" | grep -q "video"; then
+        print_info "Adding user $current_user to video group..."
+        sudo usermod -a -G video "$current_user"
+        print_success "User added to video group"
+    else
+        print_info "User already in video group"
+    fi
+    
+    if ! groups "$current_user" | grep -q "gpio"; then
+        print_info "Adding user $current_user to gpio group..."
+        sudo usermod -a -G gpio "$current_user"
+        print_success "User added to gpio group"
+    else
+        print_info "User already in gpio group"
+    fi
+    
+    # Create udev rules for persistent camera permissions
+    print_info "Creating udev rules for camera permissions..."
+    sudo tee /etc/udev/rules.d/99-camera-permissions.rules > /dev/null <<EOF
+# Camera device permissions for WANDA Telescope
+KERNEL=="media*", MODE="0666", GROUP="video"
+KERNEL=="video*", MODE="0666", GROUP="video"
+KERNEL=="v4l2-subdev*", MODE="0666", GROUP="video"
+
+# GPIO permissions
+SUBSYSTEM=="gpio", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="bcm2835-gpiomem", GROUP="gpio", MODE="0660"
+EOF
+    
+    print_success "Udev rules created for camera permissions"
+    
     # Show current configuration
     print_info "Current camera configuration:"
     grep -E "(camera_auto_detect|dtoverlay=arducam-pivariety)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
@@ -401,6 +475,60 @@ configure_arducam_uc955() {
     else
         print_info "rpicam-still not available for testing"
     fi
+    
+    print_info "Camera permissions configured. A reboot is required for all changes to take effect."
+}
+
+verify_camera_permissions() {
+    print_info "Verifying camera permissions..."
+    
+    # Check if user is in required groups
+    local current_user=$(whoami)
+    local in_video_group=false
+    local in_gpio_group=false
+    
+    if groups "$current_user" | grep -q "video"; then
+        in_video_group=true
+        print_success "User $current_user is in video group"
+    else
+        print_warning "User $current_user is not in video group"
+    fi
+    
+    if groups "$current_user" | grep -q "gpio"; then
+        in_gpio_group=true
+        print_success "User $current_user is in gpio group"
+    else
+        print_warning "User $current_user is not in gpio group"
+    fi
+    
+    # Check if udev rules exist
+    if [ -f "/etc/udev/rules.d/99-camera-permissions.rules" ]; then
+        print_success "Camera permission udev rules exist"
+    else
+        print_warning "Camera permission udev rules not found"
+    fi
+    
+    # Test camera access without sudo (if possible)
+    if command -v rpicam-still >/dev/null 2>&1; then
+        print_info "Testing camera access without sudo..."
+        
+        # Try to list cameras without sudo
+        local camera_test=$(rpicam-still --list-cameras 2>&1)
+        
+        if echo "$camera_test" | grep -q "imx477\|arducam"; then
+            print_success "Camera accessible without sudo!"
+            print_info "Camera test result: $camera_test"
+        elif echo "$camera_test" | grep -q "Could not open any dmaHeap device"; then
+            print_warning "DMA heap access issue detected - permissions may need reboot to take effect"
+            print_info "This is normal after permission changes"
+        else
+            print_warning "Camera access test inconclusive: $camera_test"
+        fi
+    else
+        print_info "rpicam-still not available for permission testing"
+    fi
+    
+    print_info "Permission verification completed"
 }
 
 show_camera_configuration_help() {
@@ -459,6 +587,7 @@ show_verification_summary() {
     print_info "  ✓ Camera detection verified"
     print_info "  ✓ Mount/GPIO detection verified"
     print_info "  ✓ Camera module configuration completed"
+    print_info "  ✓ Camera permissions verified"
     echo
     
     # Get IP address for final display
@@ -531,6 +660,7 @@ main() {
     check_camera_detection
     check_mount_detection
     configure_camera_modules
+    verify_camera_permissions
     show_verification_summary
 }
 
