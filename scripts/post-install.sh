@@ -267,8 +267,21 @@ configure_arducam_imx477() {
         print_info "CMA configuration already present"
     fi
     
-    print_success "IMX-477 configuration completed (3 lines modified as per official Arducam guide)"
+    # Fix DMA heap device permissions for camera access
+    if ! grep -q "dma_heap" /etc/udev/rules.d/99-dma-heap.rules 2>/dev/null; then
+        print_info "Setting up DMA heap device permissions..."
+        echo 'SUBSYSTEM=="dma_heap", GROUP="video", MODE="0664"' | sudo tee /etc/udev/rules.d/99-dma-heap.rules >/dev/null
+        sudo usermod -a -G video "$(whoami)"
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        print_info "Added user to video group and configured DMA heap permissions"
+    else
+        print_info "DMA heap permissions already configured"
+    fi
+    
+    print_success "IMX-477 configuration completed (3 lines modified + DMA permissions)"
     print_info "Added CMA memory allocation to prevent DMA buffer allocation failures"
+    print_info "Added DMA heap permissions for camera access"
     print_info "After reboot, verify with: rpicam-still --list-cameras"
 }
 
@@ -311,8 +324,21 @@ configure_arducam_uc955() {
         print_info "CMA configuration already present"
     fi
     
-    print_success "UC-955 (IMX462 Pivariety) configuration applied (4 lines modified)"
+    # Fix DMA heap device permissions for camera access
+    if ! grep -q "dma_heap" /etc/udev/rules.d/99-dma-heap.rules 2>/dev/null; then
+        print_info "Setting up DMA heap device permissions..."
+        echo 'SUBSYSTEM=="dma_heap", GROUP="video", MODE="0664"' | sudo tee /etc/udev/rules.d/99-dma-heap.rules >/dev/null
+        sudo usermod -a -G video "$(whoami)"
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        print_info "Added user to video group and configured DMA heap permissions"
+    else
+        print_info "DMA heap permissions already configured"
+    fi
+    
+    print_success "UC-955 (IMX462 Pivariety) configuration applied (4 lines modified + DMA permissions)"
     print_info "Added CMA memory allocation to prevent DMA buffer allocation failures"
+    print_info "Added DMA heap permissions for camera access"
 }
 
 install_arducam_drivers() {
