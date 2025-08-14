@@ -441,12 +441,15 @@ clone_repository() {
         # Try to fetch with retry logic for network issues
         local fetch_success=false
         for i in 1 2 3; do
-            if git fetch origin 2>/dev/null; then
+            print_info "Fetch attempt $i..."
+            if git fetch origin; then
                 fetch_success=true
                 break
             else
-                print_warning "Fetch attempt $i failed, retrying..."
-                sleep 2
+                if [ $i -lt 3 ]; then
+                    print_warning "Fetch attempt $i failed, retrying..."
+                    sleep 2
+                fi
             fi
         done
         
@@ -454,12 +457,12 @@ clone_repository() {
             print_error "Failed to fetch from origin after 3 attempts"
             print_info "Continuing with existing repository..."
         else
-            if ! git checkout "$BRANCH" 2>/dev/null; then
+            if ! git checkout "$BRANCH"; then
                 print_warning "Failed to checkout branch: $BRANCH"
                 print_info "Attempting to reset to origin/$BRANCH..."
-                git reset --hard "origin/$BRANCH" 2>/dev/null || true
+                git reset --hard "origin/$BRANCH" || true
             fi
-            if ! git pull origin "$BRANCH" 2>/dev/null; then
+            if ! git pull origin "$BRANCH"; then
                 print_warning "Failed to pull from origin"
                 print_info "Repository may already be up to date"
             fi
@@ -473,13 +476,16 @@ clone_repository() {
         # Try to clone with retry logic
         local clone_success=false
         for i in 1 2 3; do
-            if git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR" 2>/dev/null; then
+            print_info "Clone attempt $i..."
+            if git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"; then
                 clone_success=true
                 break
             else
-                print_warning "Clone attempt $i failed, retrying..."
-                rm -rf "$PROJECT_DIR" 2>/dev/null || true
-                sleep 3
+                if [ $i -lt 3 ]; then
+                    print_warning "Clone attempt $i failed, retrying in 3 seconds..."
+                    rm -rf "$PROJECT_DIR" 2>/dev/null || true
+                    sleep 3
+                fi
             fi
         done
         
