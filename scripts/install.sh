@@ -417,16 +417,15 @@ install_system_dependencies() {
 setup_directories() {
     print_step "3/6: Setting up project directories..."
     
-    # Create project directory
-    if ! mkdir -p "$PROJECT_DIR"; then
-        print_error "Failed to create project directory: $PROJECT_DIR"
+    # Create parent directory if it doesn't exist
+    local parent_dir=$(dirname "$PROJECT_DIR")
+    if ! mkdir -p "$parent_dir"; then
+        print_error "Failed to create parent directory: $parent_dir"
         exit 1
     fi
     
-    if ! cd "$PROJECT_DIR"; then
-        print_error "Failed to change to project directory: $PROJECT_DIR"
-        exit 1
-    fi
+    # Make sure we're in a valid directory before continuing
+    cd "$HOME" || exit 1
     
     print_success "Directories created"
 }
@@ -470,6 +469,9 @@ clone_repository() {
         fi
     else
         print_info "Cloning repository..."
+        # Make sure we're in a valid directory
+        cd "$HOME" || exit 1
+        
         # Remove any existing directory first
         rm -rf "$PROJECT_DIR" 2>/dev/null || true
         
@@ -477,6 +479,8 @@ clone_repository() {
         local clone_success=false
         for i in 1 2 3; do
             print_info "Clone attempt $i..."
+            # Ensure we're still in HOME directory
+            cd "$HOME" || exit 1
             if git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"; then
                 clone_success=true
                 break
