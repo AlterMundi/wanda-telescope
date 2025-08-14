@@ -349,6 +349,16 @@ install_system_dependencies() {
         fi
     done
     
+    # Upgrade existing packages
+    print_info "Upgrading existing packages..."
+    if sudo apt upgrade -y -qq; then
+        print_success "System packages upgraded successfully"
+    else
+        print_warning "Some packages could not be upgraded - continuing with installation"
+        # Try to fix any broken packages
+        sudo apt --fix-broken install -y >/dev/null 2>&1 || true
+    fi
+    
     # Install only essential packages for WANDA Telescope
     print_info "Installing essential packages..."
     if ! sudo apt install -y -qq \
