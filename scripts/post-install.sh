@@ -316,21 +316,28 @@ configure_arducam_imx477() {
     if grep -q "dtoverlay=imx477" "$config_file"; then
         print_info "IMX477 overlay already configured"
     else
-        print_info "Adding IMX477 overlay to $config_file..."
+        print_info "Applying IMX477 configuration to $config_file..."
         
         # Create backup
         sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         
-        # Add camera_auto_detect=0 if not present
-        if ! grep -q "camera_auto_detect=0" "$config_file"; then
-            echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
-            print_info "Added camera_auto_detect=0"
+        # Check if sensor config file exists
+        local sensor_config="$PROJECT_DIR/sensor-configs/config-for-IMX477.txt"
+        if [ ! -f "$sensor_config" ]; then
+            print_error "Sensor configuration file not found: $sensor_config"
+            print_info "Cannot proceed with camera configuration"
+            return 1
         fi
         
-        # Add IMX477 overlay
-        echo "dtoverlay=imx477" | sudo tee -a "$config_file" > /dev/null
-        print_success "Added dtoverlay=imx477"
+        # Apply the complete sensor configuration
+        print_info "Applying complete IMX477 configuration..."
+        if sudo cp "$sensor_config" "$config_file"; then
+            print_success "IMX477 configuration applied successfully"
+        else
+            print_error "Failed to apply IMX477 configuration"
+            return 1
+        fi
         
         print_warning "Configuration updated. A reboot is required for changes to take effect."
         print_info "After reboot, the camera should be detected automatically."
@@ -374,7 +381,13 @@ EOF
     
     # Show current configuration
     print_info "Current camera configuration:"
-    grep -E "(camera_auto_detect|dtoverlay=imx477)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
+    if [ -f "$config_file" ]; then
+        echo "----------------------------------------"
+        cat "$config_file"
+        echo "----------------------------------------"
+    else
+        print_info "No camera configuration found"
+    fi
     
     # Check if camera is currently detected (may not work until reboot)
     print_info "Checking current camera detection..."
@@ -407,21 +420,28 @@ configure_arducam_uc955() {
     if grep -q "dtoverlay=arducam-pivariety" "$config_file"; then
         print_info "Arducam Pivariety overlay already configured"
     else
-        print_info "Adding Arducam Pivariety overlay to $config_file..."
+        print_info "Applying UC-955 configuration to $config_file..."
         
         # Create backup
         sudo cp "$config_file" "${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         print_info "Backup created: ${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
         
-        # Add camera_auto_detect=0 if not present
-        if ! grep -q "camera_auto_detect=0" "$config_file"; then
-            echo "camera_auto_detect=0" | sudo tee -a "$config_file" > /dev/null
-            print_info "Added camera_auto_detect=0"
+        # Check if sensor config file exists
+        local sensor_config="$PROJECT_DIR/sensor-configs/config-for-UC955.txt"
+        if [ ! -f "$sensor_config" ]; then
+            print_error "Sensor configuration file not found: $sensor_config"
+            print_info "Cannot proceed with camera configuration"
+            return 1
         fi
         
-        # Add Arducam Pivariety overlay
-        echo "dtoverlay=arducam-pivariety" | sudo tee -a "$config_file" > /dev/null
-        print_success "Added dtoverlay=arducam-pivariety"
+        # Apply the complete sensor configuration
+        print_info "Applying complete UC-955 configuration..."
+        if sudo cp "$sensor_config" "$config_file"; then
+            print_success "UC-955 configuration applied successfully"
+        else
+            print_error "Failed to apply UC-955 configuration"
+            return 1
+        fi
         
         print_warning "Configuration updated. A reboot is required for changes to take effect."
         print_info "After reboot, the camera should be detected automatically."
@@ -465,7 +485,13 @@ EOF
     
     # Show current configuration
     print_info "Current camera configuration:"
-    grep -E "(camera_auto_detect|dtoverlay=arducam-pivariety)" "$config_file" 2>/dev/null || print_info "No camera configuration found"
+    if [ -f "$config_file" ]; then
+        echo "----------------------------------------"
+        cat "$config_file"
+        echo "----------------------------------------"
+    else
+        print_info "No camera configuration found"
+    fi
     
     # Check if camera is currently detected (may not work until reboot)
     print_info "Checking current camera detection..."
@@ -538,9 +564,8 @@ show_camera_configuration_help() {
     
     if [ "$camera_choice" = "1" ]; then
         print_info "ARDUCAM 12MP IMX477 Configuration:"
-        print_info "  • Added dtoverlay=imx477 to $config_file"
-        print_info "  • Disabled camera auto-detection"
-        print_info "  • Compatible with Raspberry Pi 5, 4, 3, Zero, and Compute Modules"
+        print_info "  • Applied complete IMX477 configuration from sensor-configs/config-for-IMX477.txt"
+        print_info "  • Includes optimized settings for Raspberry Pi 5, 4, 3, Zero, and Compute Modules"
         print_info "  • Supports both Bookworm and Bullseye OS"
         echo
         print_info "Next Steps:"
@@ -552,9 +577,8 @@ show_camera_configuration_help() {
         
     elif [ "$camera_choice" = "2" ]; then
         print_info "ARDUCAM UC-955 (Pivariety) Configuration:"
-        print_info "  • Added dtoverlay=arducam-pivariety to $config_file"
-        print_info "  • Disabled camera auto-detection"
-        print_info "  • High-performance IMX477-based camera"
+        print_info "  • Applied complete UC-955 configuration from sensor-configs/config-for-UC955.txt"
+        print_info "  • Includes optimized settings for high-performance IMX477-based camera"
         print_info "  • Requires official Arducam Pivariety driver"
         echo
         print_info "Next Steps:"
