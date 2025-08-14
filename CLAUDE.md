@@ -183,6 +183,28 @@ Main configuration in `config.py`:
 6. **Debugging camera detection**: Check `camera/factory.py` logs for detection process
 7. **Testing specific components**: Use pytest markers or specific test paths
 
+## Raspberry Pi Ecosystem Limitations
+
+⚠️ **Important**: WANDA development has revealed significant limitations in the Raspberry Pi software ecosystem that affect automated deployment and cross-environment compatibility. See `docs/RASPBERRY_PI_ECOSYSTEM_LIMITATIONS.md` for detailed analysis.
+
+**Key Challenges:**
+- **Package Management Fragmentation**: System packages (apt) vs virtual environment packages (pip) compatibility issues
+- **Binary Compatibility**: System picamera2 compiled against different numpy versions than venv
+- **Hardware Integration Complexity**: Multiple layers (hardware, kernel, system, application) must align
+- **Rapid Ecosystem Evolution**: Camera stack changes, OS updates, and hardware variations
+
+**Critical Dependencies:**
+- numpy version MUST match system picamera2 compilation (constrained to <2.0.0)
+- OpenCV installed via pip due to Raspberry Pi camera integration requirements
+- System packages required: python3-picamera2, python3-libcamera, libcamera-apps-lite
+- Hardware permissions: DMA heap devices, video group membership, udev rules
+
+**Testing Requirements:**
+- Always test on actual Raspberry Pi hardware, not development machines
+- Test automated installation from scratch, not incremental updates
+- Verify camera functionality includes both live feed AND still captures
+- Check logs for "Mock PiCamera" vs "picamera2.picamera2" to confirm real hardware usage
+
 ## API Endpoints
 
 ### Camera Control
