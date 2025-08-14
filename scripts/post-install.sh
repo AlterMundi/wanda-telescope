@@ -492,40 +492,81 @@ fix_pi5_dma_heap_permissions() {
     
     # Check if we're on Pi 5
     if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
-        print_info "Detected Raspberry Pi 5 - applying DMA heap permissions..."
+        print_info "Detected Raspberry Pi 5 - applying comprehensive DMA heap fix..."
         
-        # Create specific udev rules for Pi 5 DMA heap
+        # Method 1: Enhanced udev rules
+        print_info "Creating enhanced udev rules for Pi 5 DMA heap..."
         sudo tee /etc/udev/rules.d/99-pi5-dmaheap.rules > /dev/null <<EOF
 # Pi 5 DMA heap permissions (critical for camera operation)
 SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
 SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="linux,cma", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="system-heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="cma-heap", GROUP="video", MODE="0660"
 EOF
         
-        # Also add to existing camera permissions file
-        sudo tee -a /etc/udev/rules.d/99-camera-permissions.rules > /dev/null <<EOF
+        # Method 2: Kernel command line parameters
+        print_info "Checking kernel command line for DMA heap parameters..."
+        local cmdline_file="/boot/firmware/cmdline.txt"
+        if [ -f "$cmdline_file" ]; then
+            if ! grep -q "dma_heap" "$cmdline_file"; then
+                print_info "Adding DMA heap parameters to kernel command line..."
+                sudo cp "$cmdline_file" "${cmdline_file}.backup.$(date +%Y%m%d_%H%M%S)"
+                echo " $(cat "$cmdline_file") dma_heap.default_permissions=0660" | sudo tee "$cmdline_file" > /dev/null
+                print_success "Kernel command line updated with DMA heap permissions"
+            else
+                print_info "DMA heap parameters already present in kernel command line"
+            fi
+        else
+            print_warning "Kernel command line file not found: $cmdline_file"
+        fi
+        
+        # Method 3: Create systemd service for DMA heap permissions
+        print_info "Creating systemd service for DMA heap permissions..."
+        sudo tee /etc/systemd/system/fix-dma-heap-permissions.service > /dev/null <<EOF
+[Unit]
+Description=Fix DMA heap permissions for Pi 5 camera
+After=local-fs.target
+Before=wanda-telescope.service
 
-# Pi 5 DMA heap permissions (critical for camera operation)
-SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
-SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'chmod 660 /dev/dma_heap/* && chown root:video /dev/dma_heap/*'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 EOF
         
-        print_success "Pi 5 DMA heap permissions configured"
+        # Enable the service
+        sudo systemctl enable fix-dma-heap-permissions.service
+        print_success "DMA heap permission service created and enabled"
+        
+        # Method 4: Immediate permission fix
+        print_info "Applying immediate DMA heap permission fix..."
+        if [ -d "/dev/dma_heap" ]; then
+            sudo chmod 660 /dev/dma_heap/* 2>/dev/null || true
+            sudo chown root:video /dev/dma_heap/* 2>/dev/null || true
+            print_success "Immediate DMA heap permissions applied"
+        fi
         
         # Reload udev rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger
         
-        print_info "Udev rules reloaded. DMA heap permissions should now be active."
+        print_success "Comprehensive Pi 5 DMA heap fix applied"
+        print_info "Multiple methods have been implemented to ensure DMA heap access"
         
         # Test camera access after permission fix
-        print_info "Testing camera access after permission fix..."
+        print_info "Testing camera access after comprehensive fix..."
         if command -v rpicam-still >/dev/null 2>&1; then
             print_info "Attempting test capture to verify DMA heap access..."
             if timeout 10s rpicam-still -t 1000 -o /tmp/test_capture.jpg >/dev/null 2>&1; then
                 print_success "Camera test capture successful! DMA heap permissions are working."
                 rm -f /tmp/test_capture.jpg
             else
-                print_warning "Camera test capture failed. This may require a reboot for permissions to take full effect."
+                print_warning "Camera test capture failed. A reboot is required for all changes to take effect."
+                print_info "The comprehensive fix includes multiple methods that require a reboot to be fully active."
             fi
         fi
     else
@@ -886,25 +927,55 @@ quick_fix_pi5_dma() {
     print_info "Quick fix for Pi 5 DMA heap permissions..."
     
     if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
-        print_info "Applying immediate DMA heap permission fix..."
+        print_info "Applying comprehensive DMA heap permission fix..."
         
         # Ensure user is in video group
         local current_user=$(whoami)
         sudo usermod -a -G video "$current_user" 2>/dev/null || true
         
-        # Create DMA heap permissions
+        # Method 1: Enhanced udev rules
+        print_info "Creating enhanced udev rules..."
         sudo tee /etc/udev/rules.d/99-pi5-dmaheap-quick.rules > /dev/null <<EOF
-# Pi 5 DMA heap permissions (quick fix)
+# Pi 5 DMA heap permissions (comprehensive quick fix)
 SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
 SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="linux,cma", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="system-heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="cma-heap", GROUP="video", MODE="0660"
 EOF
+        
+        # Method 2: Immediate permission fix
+        print_info "Applying immediate DMA heap permissions..."
+        if [ -d "/dev/dma_heap" ]; then
+            sudo chmod 660 /dev/dma_heap/* 2>/dev/null || true
+            sudo chown root:video /dev/dma_heap/* 2>/dev/null || true
+            print_success "Immediate DMA heap permissions applied"
+        fi
+        
+        # Method 3: Kernel command line parameters
+        print_info "Updating kernel command line..."
+        local cmdline_file="/boot/firmware/cmdline.txt"
+        if [ -f "$cmdline_file" ] && ! grep -q "dma_heap" "$cmdline_file"; then
+            sudo cp "$cmdline_file" "${cmdline_file}.backup.$(date +%Y%m%d_%H%M%S)"
+            echo " $(cat "$cmdline_file") dma_heap.default_permissions=0660" | sudo tee "$cmdline_file" > /dev/null
+            print_success "Kernel command line updated"
+        fi
         
         # Reload udev rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger
         
-        print_success "Quick fix applied. Try camera again or reboot if needed."
+        print_success "Comprehensive quick fix applied. Try camera again or reboot if needed."
         print_info "Test with: rpicam-still -t 1000 -o test.jpg"
+        print_info "Note: Some changes require a reboot to take full effect."
+        
+        # Show current DMA heap status
+        print_info "Current DMA heap status:"
+        if [ -d "/dev/dma_heap" ]; then
+            ls -la /dev/dma_heap/ 2>/dev/null || print_info "Cannot list DMA heap devices"
+        else
+            print_info "DMA heap directory not found"
+        fi
     else
         print_info "Not a Raspberry Pi 5 - quick fix not applicable"
     fi
@@ -923,6 +994,24 @@ fi
 # Check for command line options
 if [ "$1" = "--quick-fix-pi5" ]; then
     quick_fix_pi5_dma
+    exit 0
+elif [ "$1" = "--check-dma" ]; then
+    print_info "Checking DMA heap status..."
+    if [ -d "/dev/dma_heap" ]; then
+        print_info "DMA heap devices found:"
+        ls -la /dev/dma_heap/
+        echo
+        print_info "Current permissions:"
+        ls -la /dev/dma_heap/ | grep -E "^-"
+        echo
+        print_info "User groups:"
+        groups
+        echo
+        print_info "DMA heap udev rules:"
+        ls -la /etc/udev/rules.d/*dma* 2>/dev/null || print_info "No DMA heap udev rules found"
+    else
+        print_info "DMA heap directory not found: /dev/dma_heap"
+    fi
     exit 0
 fi
 
