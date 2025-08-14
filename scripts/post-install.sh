@@ -486,6 +486,53 @@ EOF
     print_info "Camera permissions configured. A reboot is required for all changes to take effect."
 }
 
+# Function to fix Pi 5 DMA heap permissions
+fix_pi5_dma_heap_permissions() {
+    print_info "Checking and fixing Pi 5 DMA heap permissions..."
+    
+    # Check if we're on Pi 5
+    if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+        print_info "Detected Raspberry Pi 5 - applying DMA heap permissions..."
+        
+        # Create specific udev rules for Pi 5 DMA heap
+        sudo tee /etc/udev/rules.d/99-pi5-dmaheap.rules > /dev/null <<EOF
+# Pi 5 DMA heap permissions (critical for camera operation)
+SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+EOF
+        
+        # Also add to existing camera permissions file
+        sudo tee -a /etc/udev/rules.d/99-camera-permissions.rules > /dev/null <<EOF
+
+# Pi 5 DMA heap permissions (critical for camera operation)
+SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+EOF
+        
+        print_success "Pi 5 DMA heap permissions configured"
+        
+        # Reload udev rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        
+        print_info "Udev rules reloaded. DMA heap permissions should now be active."
+        
+        # Test camera access after permission fix
+        print_info "Testing camera access after permission fix..."
+        if command -v rpicam-still >/dev/null 2>&1; then
+            print_info "Attempting test capture to verify DMA heap access..."
+            if timeout 10s rpicam-still -t 1000 -o /tmp/test_capture.jpg >/dev/null 2>&1; then
+                print_success "Camera test capture successful! DMA heap permissions are working."
+                rm -f /tmp/test_capture.jpg
+            else
+                print_warning "Camera test capture failed. This may require a reboot for permissions to take full effect."
+            fi
+        fi
+    else
+        print_info "Not a Raspberry Pi 5 - DMA heap permissions not required"
+    fi
+}
+
 configure_arducam_uc955() {
     local config_file="$1"
     print_info "Configuring ARDUCAM UC-955 (Pivariety) camera..."
@@ -785,6 +832,18 @@ show_verification_summary() {
     print_info "  • Check logs: sudo journalctl -u $SERVICE_NAME -f"
     print_info "  • Manual start: cd $PROJECT_DIR && source venv/bin/activate && python main.py"
     print_info "  • Check hardware connections if camera/mount not working"
+    
+    # Add Pi 5 specific troubleshooting
+    if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+        echo
+        print_info "Pi 5 Specific Notes:"
+        print_info "  • DMA heap permissions have been configured for camera access"
+        print_info "  • If camera still shows 'dmaHeap allocation failure':"
+        print_info "    - Reboot the system: sudo reboot"
+        print_info "    - Check permissions: ls -la /dev/dma_heap/"
+        print_info "    - Verify user is in video group: groups"
+        print_info "    - Test camera: rpicam-still -t 1000 -o test.jpg"
+    fi
     echo
 }
 
@@ -818,7 +877,37 @@ main() {
     check_mount_detection
     configure_camera_modules
     verify_camera_permissions
+    fix_pi5_dma_heap_permissions
     show_verification_summary
+}
+
+# Quick fix function for Pi 5 DMA heap issues
+quick_fix_pi5_dma() {
+    print_info "Quick fix for Pi 5 DMA heap permissions..."
+    
+    if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+        print_info "Applying immediate DMA heap permission fix..."
+        
+        # Ensure user is in video group
+        local current_user=$(whoami)
+        sudo usermod -a -G video "$current_user" 2>/dev/null || true
+        
+        # Create DMA heap permissions
+        sudo tee /etc/udev/rules.d/99-pi5-dmaheap-quick.rules > /dev/null <<EOF
+# Pi 5 DMA heap permissions (quick fix)
+SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"
+EOF
+        
+        # Reload udev rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        
+        print_success "Quick fix applied. Try camera again or reboot if needed."
+        print_info "Test with: rpicam-still -t 1000 -o test.jpg"
+    else
+        print_info "Not a Raspberry Pi 5 - quick fix not applicable"
+    fi
 }
 
 # Validate sudo access
@@ -829,6 +918,12 @@ if ! sudo -n true 2>/dev/null; then
         print_error "Sudo access validation failed. Please ensure you have sudo privileges."
         exit 1
     fi
+fi
+
+# Check for command line options
+if [ "$1" = "--quick-fix-pi5" ]; then
+    quick_fix_pi5_dma
+    exit 0
 fi
 
 # Run main verification
