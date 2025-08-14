@@ -244,7 +244,7 @@ configure_camera_modules() {
     local pi_model=$(cat /proc/device-tree/model)
     print_info "Detected: $pi_model"
     
-    # Determine OS version and config file location
+    # Determine config file location based on hardware and OS
     local config_file=""
     local os_version=""
     
@@ -253,16 +253,42 @@ configure_camera_modules() {
         print_info "OS Version: $os_version"
     fi
     
-    if [ "$os_version" = "bookworm" ]; then
+    # Check for Raspberry Pi 5 first (which uses /boot/firmware/config.txt)
+    if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
         config_file="/boot/firmware/config.txt"
+        print_info "Detected Raspberry Pi 5 - using /boot/firmware/config.txt"
+    # Check for Bookworm OS (which also uses /boot/firmware/config.txt)
+    elif [ "$os_version" = "bookworm" ]; then
+        config_file="/boot/firmware/config.txt"
+        print_info "Detected Bookworm OS - using /boot/firmware/config.txt"
+    # Fallback to traditional location
     else
         config_file="/boot/config.txt"
+        print_info "Using traditional config location: /boot/config.txt"
     fi
     
+    # Verify config file exists, try alternative location if needed
     if [ ! -f "$config_file" ]; then
-        print_error "Configuration file not found: $config_file"
-        print_info "Cannot proceed with camera configuration"
-        return 1
+        print_warning "Configuration file not found at: $config_file"
+        
+        # Try alternative location
+        local alt_config=""
+        if [ "$config_file" = "/boot/firmware/config.txt" ]; then
+            alt_config="/boot/config.txt"
+        else
+            alt_config="/boot/firmware/config.txt"
+        fi
+        
+        if [ -f "$alt_config" ]; then
+            print_info "Found configuration file at alternative location: $alt_config"
+            config_file="$alt_config"
+        else
+            print_error "Configuration file not found at either location:"
+            print_error "  Primary: $config_file"
+            print_error "  Alternative: $alt_config"
+            print_info "Cannot proceed with camera configuration"
+            return 1
+        fi
     fi
     
     print_info "Configuration file: $config_file"
