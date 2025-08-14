@@ -82,6 +82,10 @@ class PiCamera(AbstractCamera):
     
     def _import_picamera2(self):
         """Import picamera2 modules only when needed."""
+        
+        # First, diagnose the system state
+        self._diagnose_import_environment()
+        
         # Try multiple import strategies
         import_strategies = [
             # Strategy 1: Direct import
@@ -108,14 +112,76 @@ class PiCamera(AbstractCamera):
         error_msg += "Try: sudo apt install python3-picamera2"
         raise ImportError(error_msg)
     
+    def _diagnose_import_environment(self):
+        """Diagnose the Python import environment for debugging."""
+        import sys
+        import os
+        
+        logger.info("=== Python Import Environment Diagnosis ===")
+        logger.info(f"Python executable: {sys.executable}")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Virtual environment: {os.environ.get('VIRTUAL_ENV', 'None')}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        
+        # Check system paths
+        system_paths = [
+            '/usr/lib/python3/dist-packages',
+            '/usr/local/lib/python3.11/dist-packages',
+            '/usr/local/lib/python3.10/dist-packages',
+            '/usr/local/lib/python3.9/dist-packages',
+            '/usr/lib/python3.11/dist-packages',
+            '/usr/lib/python3.10/dist-packages',
+            '/usr/lib/python3.9/dist-packages'
+        ]
+        
+        logger.info("System package paths:")
+        for path in system_paths:
+            exists = os.path.exists(path)
+            in_sys_path = path in sys.path
+            logger.info(f"  {path}: exists={exists}, in_sys_path={in_sys_path}")
+        
+        # Check if picamera2 is findable
+        try:
+            import importlib.util
+            spec = importlib.util.find_spec('picamera2')
+            if spec:
+                logger.info(f"picamera2 found at: {spec.origin}")
+            else:
+                logger.info("picamera2 spec not found")
+        except Exception as e:
+            logger.warning(f"Error checking picamera2 spec: {e}")
+        
+        logger.info("=== End Diagnosis ===")
+    
     def _import_from_system_path(self):
         """Try to import picamera2 from system Python path."""
         import sys
+        import os
         
-        # Add system picamera2 path
-        sys.path.append('/usr/lib/python3/dist-packages')
+        # Add multiple system paths where picamera2 might be installed
+        system_paths = [
+            '/usr/lib/python3/dist-packages',
+            '/usr/local/lib/python3.11/dist-packages',
+            '/usr/local/lib/python3.10/dist-packages',
+            '/usr/local/lib/python3.9/dist-packages',
+            '/usr/lib/python3.11/dist-packages',
+            '/usr/lib/python3.10/dist-packages',
+            '/usr/lib/python3.9/dist-packages'
+        ]
+        
+        # Add all system paths
+        for path in system_paths:
+            if os.path.exists(path) and path not in sys.path:
+                sys.path.insert(0, path)
+                logger.info(f"Added system path: {path}")
+        
+        # Also try to find picamera2 in any existing system paths
+        for path in sys.path:
+            if 'dist-packages' in path and os.path.exists(os.path.join(path, 'picamera2')):
+                logger.info(f"Found picamera2 in existing path: {path}")
         
         try:
+            # Try direct import first
             from picamera2 import Picamera2
             from picamera2.encoders import H264Encoder
             from picamera2.outputs import FileOutput
@@ -123,8 +189,36 @@ class PiCamera(AbstractCamera):
             logger.info("picamera2 imported successfully from system path")
             return Picamera2, H264Encoder, FileOutput
             
-        except Exception as e:
-            logger.warning(f"System path import strategy failed: {e}")
+        except ImportError as e:
+            logger.warning(f"Direct import failed: {e}")
+            
+            # Try alternative import method
+            try:
+                import importlib.util
+                
+                # Try to load picamera2 module
+                spec = importlib.util.find_spec('picamera2')
+                if spec:
+                    logger.info(f"Found picamera2 spec at: {spec.origin}")
+                    
+                    # Load the module
+                    picamera2_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(picamera2_module)
+                    
+                    # Get the classes
+                    Picamera2 = getattr(picamera2_module, 'Picamera2')
+                    H264Encoder = getattr(picamera2_module.encoders, 'H264Encoder')
+                    FileOutput = getattr(picamera2_module.outputs, 'FileOutput')
+                    
+                    logger.info("picamera2 imported successfully via importlib")
+                    return Picamera2, H264Encoder, FileOutput
+                    
+                else:
+                    logger.warning("picamera2 spec not found")
+                    
+            except Exception as e2:
+                logger.warning(f"Importlib import also failed: {e2}")
+            
             raise ImportError("Could not import picamera2 from system path")
     
     def _import_via_subprocess(self):
