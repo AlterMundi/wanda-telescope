@@ -469,24 +469,31 @@ clone_repository() {
         fi
     else
         print_info "Cloning repository..."
-        # Make sure we're in a valid directory
+        # CRITICAL: Change to HOME first BEFORE removing PROJECT_DIR
+        # Otherwise we might delete our current working directory
         cd "$HOME" || exit 1
         
-        # Remove any existing directory first
-        rm -rf "$PROJECT_DIR" 2>/dev/null || true
+        # NOW it's safe to remove any existing directory
+        if [ -d "$PROJECT_DIR" ]; then
+            print_info "Removing existing directory..."
+            rm -rf "$PROJECT_DIR" 2>/dev/null || true
+        fi
         
         # Try to clone with retry logic
         local clone_success=false
         for i in 1 2 3; do
             print_info "Clone attempt $i..."
-            # Ensure we're still in HOME directory
+            # Make absolutely sure we're in HOME directory
             cd "$HOME" || exit 1
+            
             if git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"; then
                 clone_success=true
                 break
             else
                 if [ $i -lt 3 ]; then
                     print_warning "Clone attempt $i failed, retrying in 3 seconds..."
+                    # Change to HOME before removing to avoid directory issues
+                    cd "$HOME" || exit 1
                     rm -rf "$PROJECT_DIR" 2>/dev/null || true
                     sleep 3
                 fi
@@ -658,6 +665,9 @@ if [ "$EUID" -eq 0 ]; then
     print_error "Do not run this script as root. Run as the user that will operate WANDA."
     exit 1
 fi
+
+# IMPORTANT: Always start from HOME directory to avoid directory issues
+cd "$HOME" || exit 1
 
 # Cleanup function for existing installations
 cleanup_existing_installation() {
