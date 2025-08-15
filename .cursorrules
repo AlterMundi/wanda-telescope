@@ -532,6 +532,39 @@ def benchmark_capture(self, num_frames=100):
 - **Configuration Failures**: Check camera permissions and libcamera status
 - **Streaming Problems**: Test with rpicam-vid command line tool
 
+## Raspberry Pi Ecosystem Constraints
+
+⚠️ **Critical Understanding**: WANDA development is constrained by fundamental Raspberry Pi ecosystem limitations that require specific development practices.
+
+### Package Management Reality
+- **System Dependencies**: picamera2, libcamera, RPi.GPIO MUST be system packages (apt)
+- **Binary Compatibility**: Virtual environment packages must match system compilation versions
+- **Version Constraints**: numpy <2.0.0 required for picamera2 compatibility
+- **OpenCV Special Case**: Must use pip version due to Pi camera integration requirements
+
+### Development Environment Requirements
+- **Real Hardware Testing**: Always test on actual Raspberry Pi, not development machines
+- **Fresh Installation Testing**: Test automated installation from scratch, not incremental updates
+- **Dependency Validation**: Verify system + venv package combinations work together
+- **Log Analysis**: Check for "Mock PiCamera" vs "picamera2.picamera2" to confirm real hardware usage
+
+### Architecture Implications
+- **Multi-Layer Integration**: Hardware → Kernel → System → Python → Virtual Environment
+- **Failure Fallbacks**: Implement subprocess wrappers when direct library access fails
+- **Permission Management**: DMA heap devices, video group membership, udev rules
+- **Hardware Configuration**: Device tree overlays, memory allocation, GPIO setup
+
+### Platform Limitations Awareness
+- **Rapid Evolution**: Camera stack, OS updates, hardware variants create moving targets
+- **Compatibility Matrix**: Different requirements for Pi 4 vs Pi 5, Bullseye vs Bookworm
+- **Production Considerations**: Ecosystem limitations may require platform alternatives for deployment
+
+### Testing Strategy
+- **Hardware Mocking**: Essential for development, but insufficient for validation
+- **Integration Testing**: Must include real camera capture AND live feed verification
+- **Version Matrix Testing**: Test across Pi models and OS versions
+- **Automated Installation**: Validate complete setup process, not just code functionality
+
 ## Additional Notes
 - Comment critical logic (e.g., coordinate calculations, motor timing) with purpose and context.
 - Use docstrings for Python functions/classes and inline comments for Arduino.
@@ -541,3 +574,4 @@ def benchmark_capture(self, num_frames=100):
 - **Test documentation**: Use docstrings in test methods to explain test purpose and expected behavior.
 - **Hardware abstraction**: Use mock implementations for development and testing without physical hardware.
 - **Error logging**: Implement comprehensive logging for debugging hardware issues in production.
+- **Ecosystem Documentation**: Reference `docs/RASPBERRY_PI_ECOSYSTEM_LIMITATIONS.md` for detailed platform constraints.
