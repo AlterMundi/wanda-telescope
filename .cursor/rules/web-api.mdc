@@ -1,0 +1,90 @@
+# Web Interface & API Rules
+
+## Flask Application Structure
+- Template folder: `web/templates/`
+- Static folder: `web/static/`
+- Main app class: `web.app.WandaApp`
+- Threaded mode enabled for concurrent requests
+
+## API Endpoints
+
+### Camera Control
+```
+POST /capture_still      - Capture photo
+POST /start_video        - Start recording
+POST /stop_video         - Stop recording
+GET  /capture_status     - Get status
+GET  /video_feed        - MJPEG stream
+```
+
+### Mount Control
+```
+POST /start_tracking     - Start tracking (params: speed, direction)
+POST /stop_tracking      - Stop tracking
+```
+
+### Session Management
+```
+POST /start_session      - Start automated session
+POST /stop_session       - Stop current session
+GET  /session_status     - Get progress/status
+```
+
+## Response Standards
+
+### Success Response
+```json
+{
+  "status": "success",
+  "message": "Operation completed",
+  "data": { ... }
+}
+```
+
+### Error Response
+```json
+{
+  "status": "error",
+  "message": "Detailed error message",
+  "error_code": "CAMERA_TIMEOUT"
+}
+```
+
+## HTTP Status Codes
+- `200` - Success
+- `400` - Bad request (invalid parameters)
+- `409` - Conflict (operation already in progress)
+- `500` - Internal server error
+- `503` - Service unavailable (hardware not ready)
+
+## Frontend Guidelines
+- Use vanilla JavaScript (no frameworks)
+- AJAX for all control operations
+- Collapsible panels for UI sections
+- Real-time status updates via polling
+- Responsive design for mobile access
+
+## MJPEG Streaming
+```python
+def generate_frames():
+    """Generate MJPEG stream."""
+    while True:
+        frame = camera.get_frame()
+        if frame:
+            yield (b'--frame\r\n'
+                  b'Content-Type: image/jpeg\r\n\r\n' + 
+                  frame + b'\r\n')
+```
+
+## Session Handling
+- Thread-based for non-blocking operation
+- Progress callbacks for UI updates
+- JSON metadata export
+- Graceful interruption support
+
+## Security Considerations
+- No authentication (local network only)
+- Validate all input parameters
+- Sanitize file paths
+- Rate limit capture operations
+- Log all API requests

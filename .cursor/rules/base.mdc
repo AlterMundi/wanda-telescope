@@ -1,0 +1,56 @@
+# WANDA Telescope - Base Rules (Always Applied)
+
+## Platform Usage
+- This file is for Cursor users only. Cursor will always apply `base.mdc` and you can enable additional rule files from `.cursor/rules/` as needed.
+- Claude Code users should NOT load `.cursor/rules/*`. Use the repository-level `CLAUDE.md` instead, which mirrors these rules for Claude.
+
+## Project Context
+WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+
+## Core Architecture Requirements
+- **Factory Pattern**: Use factories for camera and mount hardware detection
+- **Abstract Base Classes**: Define interfaces through ABC for all hardware components
+- **Hardware Abstraction**: Always provide mock implementations for development
+- **Thread Safety**: Ensure all hardware operations are thread-safe
+
+## Mandatory Development Practices
+
+### Test-Driven Development (TDD)
+- **ALWAYS write tests first** before implementing any feature
+- **Minimum 85% code coverage** for all new code
+- **Follow AAA pattern**: Arrange → Act → Assert
+- **Mock all hardware dependencies** in unit tests
+
+### Code Quality Standards
+- **Maximum 300 lines per file** (exceptions require justification)
+- **No code duplication** - refactor shared logic to utils
+- **Clear naming**: Use descriptive names (e.g., `telescope_altitude`, `move_stepper`)
+- **PEP 8 compliance** for all Python code
+
+### Change Control
+- **Only implement requested changes** - no unsolicited improvements
+- **Preserve backward compatibility** unless explicitly requested
+- **Document breaking changes** with migration guides
+
+## Critical Constraints
+
+### Raspberry Pi Ecosystem
+- System packages (apt) required for: picamera2, libcamera, RPi.GPIO
+- numpy version must be <2.0.0 for picamera2 compatibility
+- Always test on actual Raspberry Pi hardware, not just mocks
+
+### Error Handling
+- All camera operations must have retry logic with exponential backoff
+- Mount errors must safely return to home position
+- Web routes must return appropriate HTTP status codes with JSON error messages
+- Always log full stack traces for debugging
+
+## Project Structure
+```
+camera/          # Camera implementations and factory
+mount/           # Mount control and stepper motor
+session/         # Automated capture sessions
+web/            # Flask web interface
+utils/          # Shared utilities
+tests/          # Test suite (unit, integration, web)
+```

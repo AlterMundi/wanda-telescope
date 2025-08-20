@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Platform Usage
+
+- Use this file when working with Claude Code (claude.ai/code). It contains the authoritative rules and guidance for Claude.
+- Cursor users should not rely on this file. Instead, use the modular rules under `.cursor/rules/` where `base.mdc` is always applied and context-specific `.mdc` files (e.g., `hardware.mdc`, `web-api.mdc`) can be enabled as needed.
+
 ## Project Overview
 
 WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
@@ -159,7 +164,7 @@ Main configuration in `config.py`:
   - HOST = '0.0.0.0' (all interfaces)
   - PORT = 5000
 
-## Development Guidelines (from .cursorrules)
+## Development Guidelines (aligned with `.cursor/rules` modular structure)
 
 ### Test-Driven Development (TDD) - MANDATORY
 1. **Write failing test first** - Define expected behavior
