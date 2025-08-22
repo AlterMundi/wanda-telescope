@@ -90,7 +90,7 @@ check_system() {
     print_info "Checking for broken packages..."
     if dpkg -l | grep -q "^iU\|^rc"; then
         print_warning "Found broken packages, attempting to fix..."
-        sudo apt --fix-broken install -y || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y || true
         sudo dpkg --configure -a || true
     fi
     
@@ -193,8 +193,8 @@ sync_system_clock() {
         # Final check - if still off, try to install and use ntpdate
         if ! command -v ntpdate >/dev/null 2>&1; then
             print_info "Installing ntpdate for clock synchronization..."
-            if sudo apt update -qq >/dev/null 2>&1; then
-                if sudo apt install -y ntpdate >/dev/null 2>&1; then
+            if sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; then
+                if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ntpdate >/dev/null 2>&1; then
                     print_info "ntpdate installed, syncing clock..."
                     if sudo ntpdate -s time.nist.gov; then
                         print_success "Clock synchronized using newly installed ntpdate"
@@ -305,7 +305,7 @@ install_system_dependencies() {
     local update_success=false
     
     while [ $retry_count -lt $max_retries ] && [ "$update_success" = false ]; do
-        if sudo apt update -qq; then
+        if sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
             update_success=true
             print_success "Package list updated successfully"
         else
@@ -327,7 +327,7 @@ install_system_dependencies() {
                 print_info "Trying to continue with existing package list..."
                 
                 # Try to continue with existing package list
-                if sudo apt list --upgradable >/dev/null 2>&1; then
+                if sudo DEBIAN_FRONTEND=noninteractive apt-get list --upgradable >/dev/null 2>&1; then
                     print_warning "Continuing with existing package list"
                     update_success=true
                 else
@@ -335,7 +335,7 @@ install_system_dependencies() {
                     
                     # Last resort: try to force a package list update by ignoring date issues
                     print_info "Attempting to force package list update..."
-                    if sudo apt update -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false -qq >/dev/null 2>&1; then
+                    if sudo DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false -qq >/dev/null 2>&1; then
                         print_success "Forced package list update successful"
                         update_success=true
                     else
@@ -352,18 +352,27 @@ install_system_dependencies() {
     # Upgrade existing packages (with non-interactive mode to avoid prompts)
     print_info "Upgrading existing packages..."
     export DEBIAN_FRONTEND=noninteractive
+    export UCF_FORCE_CONFNEW=1
+    export UCF_FORCE_CONFOLD=1
+    
+    # Handle initramfs-tools configuration conflict proactively
+    print_info "Handling package configuration conflicts..."
+    if [ -f /etc/initramfs-tools/initramfs.conf ]; then
+        print_info "Backing up current initramfs.conf..."
+        sudo cp /etc/initramfs-tools/initramfs.conf /etc/initramfs-tools/initramfs.conf.backup || true
+    fi
+    
     if sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq --no-install-recommends; then
         print_success "System packages upgraded successfully"
     else
         print_warning "Some packages could not be upgraded - continuing with installation"
         # Try to fix any broken packages
-        sudo apt --fix-broken install -y >/dev/null 2>&1 || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y >/dev/null 2>&1 || true
     fi
-    unset DEBIAN_FRONTEND
     
     # Install only essential packages for WANDA Telescope
     print_info "Installing essential packages..."
-    if ! sudo apt install -y -qq \
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         git \
         python3 \
         python3-pip \
@@ -391,15 +400,15 @@ install_system_dependencies() {
         
         print_error "Failed to install system packages"
         print_info "Attempting to fix broken packages..."
-        sudo apt --fix-broken install -y || true
-        sudo dpkg --configure -a || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y || true
+        sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
         exit 1
     fi
     
     # Install Pi-specific packages if on Raspberry Pi
     if [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
         print_info "Installing Raspberry Pi specific packages..."
-        if ! sudo apt install -y -qq \
+        if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             python3-picamera2 \
             python3-libcamera \
             python3-rpi.gpio \
@@ -411,7 +420,32 @@ install_system_dependencies() {
         fi
     fi
     
+    # Final package configuration fix
+    print_info "Finalizing package configuration..."
+    
+    # Handle any remaining initramfs-tools issues
+    if dpkg -l | grep -q "initramfs-tools"; then
+        print_info "Final initramfs-tools configuration check..."
+        # Force configuration of any unconfigured packages
+        echo 'Dpkg::Options::="--force-confnew";' | sudo tee /etc/apt/apt.conf.d/99force-confnew-final >/dev/null 2>&1 || true
+        
+        # Try to configure all packages
+        sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y || true
+        
+        # Remove temporary configuration
+        sudo rm -f /etc/apt/apt.conf.d/99force-confnew-final || true
+    else
+        sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y || true
+    fi
+    
     print_success "System dependencies installed"
+    
+    # Clean up environment variables
+    unset DEBIAN_FRONTEND
+    unset UCF_FORCE_CONFNEW
+    unset UCF_FORCE_CONFOLD
 }
 
 setup_directories() {
@@ -522,6 +556,22 @@ setup_python_environment() {
         exit 1
     fi
     
+    # Check network connectivity for pip operations
+    print_info "Checking network connectivity for pip operations..."
+    local pip_network_ok=false
+    
+    # Test PyPI connectivity
+    if curl -s --connect-timeout 10 --max-time 30 https://pypi.org/simple/ >/dev/null 2>&1; then
+        print_success "PyPI connectivity confirmed"
+        pip_network_ok=true
+    elif curl -s --connect-timeout 10 --max-time 30 https://www.piwheels.org/simple/ >/dev/null 2>&1; then
+        print_success "PiWheels connectivity confirmed"
+        pip_network_ok=true
+    else
+        print_warning "Limited network connectivity detected"
+        print_info "Will use fallback strategies for package installation"
+    fi
+    
     # Create virtual environment
     print_info "Creating Python virtual environment..."
     if ! python3 -m venv venv; then
@@ -533,24 +583,126 @@ setup_python_environment() {
     local pip_path="$PROJECT_DIR/venv/bin/pip"
     local python_path="$PROJECT_DIR/venv/bin/python"
     
-    # Upgrade pip
+    # Upgrade pip with retry logic and fallback options
     print_info "Upgrading pip..."
-    if ! "$pip_path" install --upgrade pip setuptools wheel; then
-        print_error "Failed to upgrade pip"
-        exit 1
+    
+    # Try to upgrade pip with retries and different index URLs
+    local pip_upgrade_success=false
+    local max_pip_retries=3
+    
+    for attempt in $(seq 1 $max_pip_retries); do
+        print_info "Pip upgrade attempt $attempt/$max_pip_retries..."
+        
+        # Try with default index first
+        if "$pip_path" install --upgrade pip setuptools wheel --timeout 60; then
+            pip_upgrade_success=true
+            print_success "Pip upgraded successfully"
+            break
+        fi
+        
+        print_warning "Pip upgrade attempt $attempt failed, trying alternative approach..."
+        
+        # Try with different timeout and index
+        if "$pip_path" install --upgrade pip setuptools wheel --timeout 120 --index-url https://pypi.org/simple/; then
+            pip_upgrade_success=true
+            print_success "Pip upgraded successfully with alternative index"
+            break
+        fi
+        
+        # Try with just pip upgrade (no setuptools/wheel)
+        if "$pip_path" install --upgrade pip --timeout 60; then
+            pip_upgrade_success=true
+            print_success "Pip upgraded successfully (basic upgrade only)"
+            break
+        fi
+        
+        if [ $attempt -lt $max_pip_retries ]; then
+            print_warning "Waiting 5 seconds before retry..."
+            sleep 5
+        fi
+    done
+    
+    if [ "$pip_upgrade_success" = false ]; then
+        print_warning "Failed to upgrade pip after $max_pip_retries attempts"
+        print_info "Continuing with existing pip version..."
+        
+        # Verify pip is working
+        if ! "$pip_path" --version >/dev/null 2>&1; then
+            print_error "Pip is not working. Cannot continue with installation."
+            exit 1
+        fi
     fi
     
-    # Install Python dependencies
+    # Install Python dependencies with retry logic
     print_info "Installing Python dependencies..."
+    
     if [ -f "requirements.txt" ]; then
-        if ! "$pip_path" install -r requirements.txt; then
-            print_error "Failed to install requirements.txt dependencies"
+        local deps_success=false
+        local max_deps_retries=3
+        
+        for attempt in $(seq 1 $max_deps_retries); do
+            print_info "Dependencies installation attempt $attempt/$max_deps_retries..."
+            
+            # Try with default settings first
+            if "$pip_path" install -r requirements.txt --timeout 120; then
+                deps_success=true
+                print_success "Dependencies installed successfully"
+                break
+            fi
+            
+            print_warning "Dependencies installation attempt $attempt failed, trying alternative approach..."
+            
+            # Try with different index and timeout
+            if "$pip_path" install -r requirements.txt --timeout 180 --index-url https://pypi.org/simple/; then
+                deps_success=true
+                print_success "Dependencies installed successfully with alternative index"
+                break
+            fi
+            
+            # Try with just essential packages if all else fails
+            if [ $attempt -eq $max_deps_retries ]; then
+                print_warning "Final attempt: installing only essential packages..."
+                if "$pip_path" install flask numpy pillow requests --timeout 120; then
+                    deps_success=true
+                    print_success "Essential dependencies installed successfully"
+                    break
+                fi
+            fi
+            
+            if [ $attempt -lt $max_deps_retries ]; then
+                print_warning "Waiting 10 seconds before retry..."
+                sleep 10
+            fi
+        done
+        
+        if [ "$deps_success" = false ]; then
+            print_error "Failed to install dependencies after $max_deps_retries attempts"
+            print_info "Installation cannot continue without dependencies."
             exit 1
         fi
     else
         print_warning "requirements.txt not found, installing basic dependencies..."
-        if ! "$pip_path" install flask opencv-python numpy pillow requests; then
-            print_error "Failed to install basic dependencies"
+        
+        local basic_deps_success=false
+        local max_basic_retries=3
+        
+        for attempt in $(seq 1 $max_basic_retries); do
+            print_info "Basic dependencies installation attempt $attempt/$max_basic_retries..."
+            
+            if "$pip_path" install flask opencv-python numpy pillow requests --timeout 120; then
+                basic_deps_success=true
+                print_success "Basic dependencies installed successfully"
+                break
+            fi
+            
+            if [ $attempt -lt $max_basic_retries ]; then
+                print_warning "Waiting 10 seconds before retry..."
+                sleep 10
+            fi
+        done
+        
+        if [ "$basic_deps_success" = false ]; then
+            print_error "Failed to install basic dependencies after $max_basic_retries attempts"
             exit 1
         fi
     fi
@@ -699,11 +851,41 @@ cleanup_existing_installation() {
     
     # Clean up any broken packages
     print_info "Cleaning up package system..."
-    sudo apt autoremove -y
-    sudo apt autoclean
+    sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get autoclean
     
     print_success "Cleanup completed. Ready for fresh installation."
     echo
+}
+
+# Function to handle initramfs-tools configuration conflicts
+handle_initramfs_conflicts() {
+    print_info "Proactively handling initramfs-tools configuration conflicts..."
+    
+    # Check if initramfs-tools is installed and has conflicts
+    if dpkg -l | grep -q "initramfs-tools"; then
+        print_info "initramfs-tools detected, checking for configuration conflicts..."
+        
+        # Backup current configuration if it exists
+        if [ -f /etc/initramfs-tools/initramfs.conf ]; then
+            print_info "Backing up current initramfs.conf..."
+            sudo cp /etc/initramfs-tools/initramfs.conf /etc/initramfs-tools/initramfs.conf.backup.$(date +%Y%m%d_%H%M%S) || true
+        fi
+        
+        # Force package maintainer's version for initramfs-tools
+        print_info "Forcing package maintainer's version for initramfs-tools..."
+        echo 'Dpkg::Options::="--force-confnew";' | sudo tee /etc/apt/apt.conf.d/99force-confnew >/dev/null 2>&1 || true
+        
+        # Try to reconfigure initramfs-tools
+        print_info "Reconfiguring initramfs-tools..."
+        sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -f -y || true
+        
+        # Remove the temporary configuration
+        sudo rm -f /etc/apt/apt.conf.d/99force-confnew || true
+        
+        print_success "initramfs-tools configuration conflicts handled"
+    fi
 }
 
 # Check if this is a reinstallation
@@ -740,6 +922,7 @@ main() {
     print_banner
     check_system
     sync_system_clock
+    handle_initramfs_conflicts
     install_system_dependencies
     setup_directories
     clone_repository

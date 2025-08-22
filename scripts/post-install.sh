@@ -42,6 +42,7 @@ WEB_PORT=5000
 # Camera setup flags
 CAMERA_TYPE=""
 AUTO_REBOOT=""
+TEST_AFTER_REBOOT=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -66,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             AUTO_REBOOT="yes"
             shift
             ;;
+        --test-after-reboot)
+            TEST_AFTER_REBOOT="yes"
+            shift
+            ;;
         --help)
             echo "WANDA Telescope Post-Installation Verification"
             echo ""
@@ -77,6 +82,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --camera-usb         Use USB camera (no configuration needed)"
             echo "  --camera-skip        Skip camera setup"
             echo "  --auto-reboot        Automatically reboot after camera configuration"
+            echo "  --test-after-reboot  Test camera functionality after reboot (useful for debugging)"
             echo "  --help               Show this help message"
             echo ""
             echo "Examples:"
@@ -84,6 +90,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --camera-imx477 --auto-reboot     # Auto-configure IMX-477 and reboot"
             echo "  $0 --camera-uc955                     # Configure UC-955, ask about reboot"
             echo "  $0 --camera-usb                       # Set up for USB camera"
+            echo "  $0 --test-after-reboot                # Test camera after recent configuration"
             exit 0
             ;;
         *)
@@ -291,19 +298,22 @@ configure_arducam_uc955() {
     # Backup current config
     sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.backup.$(date +%Y%m%d_%H%M%S)
     
-    # Apply minimal changes for UC-955 (IMX462 sensor)
+    # Apply configuration for UC-955 (IMX462 sensor)
     local config_file="/boot/firmware/config.txt"
     
     # Set camera_auto_detect=0
     if grep -q "^camera_auto_detect=" "$config_file"; then
         sudo sed -i 's/^camera_auto_detect=.*/camera_auto_detect=0/' "$config_file"
+        print_info "Updated camera_auto_detect=0"
     else
         echo "camera_auto_detect=0" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added camera_auto_detect=0"
     fi
     
-    # Comment out dtoverlay=vc4-kms-v3d if present
+    # Comment out dtoverlay=vc4-kms-v3d if present (conflicts with Pivariety)
     if grep -q "^dtoverlay=vc4-kms-v3d" "$config_file"; then
         sudo sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$config_file"
+        print_info "Commented out vc4-kms-v3d overlay (conflicts with Pivariety)"
     fi
     
     # Add dtoverlay=arducam-pivariety
@@ -314,14 +324,39 @@ configure_arducam_uc955() {
         else
             echo "dtoverlay=arducam-pivariety" | sudo tee -a "$config_file" >/dev/null
         fi
+        print_info "Added dtoverlay=arducam-pivariety"
+    else
+        print_info "dtoverlay=arducam-pivariety already present"
     fi
     
-    # Add CMA memory configuration for high-resolution camera support
+    # Add CMA memory configuration for high-resolution camera support (increased to 512MB for IMX462)
     if ! grep -q "^dtoverlay=cma" "$config_file"; then
-        echo "dtoverlay=cma,cma-256" | sudo tee -a "$config_file" >/dev/null
-        print_info "Added CMA memory allocation (256MB) for camera buffer support"
+        echo "dtoverlay=cma,cma-512" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added CMA memory allocation (512MB) for IMX462 buffer support"
     else
-        print_info "CMA configuration already present"
+        # Update existing CMA to 512MB if it's less
+        if grep -q "^dtoverlay=cma,cma-256" "$config_file"; then
+            sudo sed -i 's/^dtoverlay=cma,cma-256/dtoverlay=cma,cma-512/' "$config_file"
+            print_info "Updated CMA memory allocation from 256MB to 512MB for IMX462"
+        else
+            print_info "CMA configuration already present (may need manual adjustment to 512MB)"
+        fi
+    fi
+    
+    # Add specific IMX462 sensor configuration
+    if ! grep -q "^dtoverlay=imx462" "$config_file"; then
+        echo "dtoverlay=imx462" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added dtoverlay=imx462 for IMX462 sensor support"
+    else
+        print_info "dtoverlay=imx462 already present"
+    fi
+    
+    # Add imx290 overlay for device tree compatibility (UC-955 uses IMX462 sensor but imx290 node)
+    if ! grep -q "^dtoverlay=imx290" "$config_file"; then
+        echo "dtoverlay=imx290" | sudo tee -a "$config_file" >/dev/null
+        print_info "Added dtoverlay=imx290 for device tree compatibility"
+    else
+        print_info "dtoverlay=imx290 already present"
     fi
     
     # Fix DMA heap device permissions for camera access
@@ -336,9 +371,65 @@ configure_arducam_uc955() {
         print_info "DMA heap permissions already configured"
     fi
     
-    print_success "UC-955 (IMX462 Pivariety) configuration applied (4 lines modified + DMA permissions)"
-    print_info "Added CMA memory allocation to prevent DMA buffer allocation failures"
-    print_info "Added DMA heap permissions for camera access"
+    # Create the missing arducam-pivariety.json configuration file
+    print_info "Creating arducam-pivariety.json configuration file..."
+    local config_dir="/usr/share/libcamera/ipa/rpi/pisp"
+    sudo mkdir -p "$config_dir"
+    
+    # Create the configuration file with IMX462-specific settings
+    cat << 'EOF' | sudo tee "$config_dir/arducam-pivariety.json" >/dev/null
+{
+    "version": "1.0.0",
+    "target": "bcm2712",
+    "cameras": [
+        {
+            "name": "arducam-pivariety",
+            "model": "IMX462",
+            "sensor": {
+                "width": 1920,
+                "height": 1080,
+                "bit_depth": 10,
+                "formats": [
+                    "SRGGB10_CSI2P",
+                    "SRGGB12_CSI2P"
+                ],
+                "exposure": {
+                    "min": 1,
+                    "max": 1000000
+                },
+                "gain": {
+                    "min": 1.0,
+                    "max": 16.0
+                }
+            },
+            "isp": {
+                "pisp_variant": "BCM2712_C0",
+                "cma_heap": "cma_heap",
+                "buffer_size": 512
+            }
+        }
+    ]
+}
+EOF
+    
+    if [ -f "$config_dir/arducam-pivariety.json" ]; then
+        print_success "Created arducam-pivariety.json configuration file"
+        print_info "File location: $config_dir/arducam-pivariety.json"
+    else
+        print_warning "Failed to create arducam-pivariety.json configuration file"
+    fi
+    
+    # Set proper permissions for the configuration file
+    sudo chmod 644 "$config_dir/arducam-pivariety.json"
+    sudo chown root:root "$config_dir/arducam-pivariety.json"
+    
+    print_success "UC-955 (IMX462 Pivariety) configuration completed"
+    print_info "Configuration includes:"
+    print_info "  - Device tree overlays for Pivariety and IMX462"
+    print_info "  - CMA memory allocation (512MB) for IMX462 buffer support"
+    print_info "  - DMA heap permissions for camera access"
+    print_info "  - arducam-pivariety.json configuration file"
+    print_info "  - Disabled conflicting vc4-kms-v3d overlay"
 }
 
 install_arducam_drivers() {
@@ -348,6 +439,14 @@ install_arducam_drivers() {
     if ! sudo apt install -y -qq wget; then
         print_error "Failed to install wget"
         return 1
+    fi
+    
+    # Install libcamera tools if not available
+    print_info "Installing libcamera tools..."
+    if ! sudo apt install -y -qq libcamera-apps-lite libcamera-tools; then
+        print_warning "Failed to install libcamera tools, but continuing with driver installation"
+    else
+        print_success "libcamera tools installed successfully"
     fi
     
     # Download and install Arducam drivers using official installation script
@@ -364,6 +463,15 @@ install_arducam_drivers() {
                 print_info "Installing kernel driver support..."
                 if sudo ./install_pivariety_pkgs.sh -p kernel_driver; then
                     print_success "Arducam Pivariety drivers for IMX462 installed successfully"
+                    
+                    # Verify installation by checking if rpicam-still works
+                    print_info "Verifying camera detection..."
+                    if timeout 10 rpicam-still --list-cameras >/dev/null 2>&1; then
+                        print_success "Camera detection verified - rpicam-still is working"
+                    else
+                        print_warning "Camera detection verification failed - may need reboot"
+                    fi
+                    
                     return 0
                 else
                     print_warning "Kernel driver installation had issues, but libcamera components installed"
@@ -381,6 +489,83 @@ install_arducam_drivers() {
         print_error "Failed to download Arducam driver installer from official source"
         print_info "This may be due to network issues or changes in the repository structure"
         return 1
+    fi
+}
+
+verify_uc955_configuration() {
+    print_info "Verifying UC-955 camera configuration..."
+    
+    # Check if the configuration file was created
+    local config_file="/usr/share/libcamera/ipa/rpi/pisp/arducam-pivariety.json"
+    if [ -f "$config_file" ]; then
+        print_success "arducam-pivariety.json configuration file exists"
+    else
+        print_warning "arducam-pivariety.json configuration file not found"
+        print_info "This may cause the 'Configuration file not found' error in rpicam-still"
+    fi
+    
+    # Check if the device tree overlays are properly configured
+    local config_txt="/boot/firmware/config.txt"
+    if grep -q "^dtoverlay=arducam-pivariety" "$config_txt"; then
+        print_success "arducam-pivariety overlay is configured"
+    else
+        print_warning "arducam-pivariety overlay is not configured"
+    fi
+    
+    if grep -q "^dtoverlay=imx462" "$config_txt"; then
+        print_success "imx462 overlay is configured"
+    else
+        print_warning "imx462 overlay is not configured"
+    fi
+    
+    if grep -q "^dtoverlay=imx290" "$config_txt"; then
+        print_success "imx290 overlay is configured"
+    else
+        print_warning "imx290 overlay is not configured"
+    fi
+    
+    # Check CMA memory allocation
+    if grep -q "^dtoverlay=cma,cma-512" "$config_txt"; then
+        print_success "CMA memory allocation is set to 512MB"
+    elif grep -q "^dtoverlay=cma" "$config_txt"; then
+        print_warning "CMA memory allocation is configured but may not be 512MB"
+        print_info "Current CMA setting: $(grep '^dtoverlay=cma' "$config_txt")"
+    else
+        print_warning "CMA memory allocation is not configured"
+    fi
+    
+    # Check if vc4-kms-v3d is commented out
+    if grep -q "^#dtoverlay=vc4-kms-v3d" "$config_txt"; then
+        print_success "vc4-kms-v3d overlay is properly commented out"
+    elif grep -q "^dtoverlay=vc4-kms-v3d" "$config_txt"; then
+        print_warning "vc4-kms-v3d overlay is still active and may conflict with Pivariety"
+    fi
+    
+    # Test camera detection
+    print_info "Testing camera detection..."
+    if timeout 10 rpicam-still --list-cameras >/dev/null 2>&1; then
+        print_success "Camera detection test passed"
+        
+        # Get detailed camera info
+        local camera_info=$(timeout 10 rpicam-still --list-cameras 2>/dev/null)
+        if [ -n "$camera_info" ]; then
+            print_info "Camera detection output:"
+            echo "$camera_info"
+        fi
+    else
+        print_warning "Camera detection test failed"
+        print_info "This may indicate a configuration issue or the need for a reboot"
+    fi
+    
+    # Check for common error messages in recent logs
+    print_info "Checking for camera-related errors in system logs..."
+    local error_count=$(sudo journalctl --since "1 hour ago" | grep -i "arducam\|pivariety\|imx462\|configuration.*not.*found" | wc -l)
+    if [ "$error_count" -gt 0 ]; then
+        print_warning "Found $error_count camera-related errors in recent logs"
+        print_info "Recent camera errors:"
+        sudo journalctl --since "1 hour ago" | grep -i "arducam\|pivariety\|imx462\|configuration.*not.*found" | tail -5
+    else
+        print_success "No camera-related errors found in recent logs"
     fi
 }
 
@@ -425,10 +610,22 @@ check_camera_detection() {
                         if install_arducam_drivers; then
                             configure_arducam_uc955
                             print_success "UC-955 (IMX462) configured with drivers. System will need to reboot to take effect."
+                            
+                            # Verify configuration after setup
+                            print_info "Verifying UC-955 configuration..."
+                            verify_uc955_configuration
+                            
+                            print_info "After reboot, test the camera with: $0 --test-after-reboot"
                         else
                             print_warning "Driver installation failed, but overlay configured."
                             configure_arducam_uc955
                             print_info "You may need to install drivers manually later using official Arducam guide."
+                            
+                            # Still verify what we can
+                            print_info "Verifying UC-955 configuration..."
+                            verify_uc955_configuration
+                            
+                            print_info "After reboot, test the camera with: $0 --test-after-reboot"
                         fi
                         camera_configured=true
                         ;;
@@ -479,10 +676,22 @@ check_camera_detection() {
                         if install_arducam_drivers; then
                             configure_arducam_uc955
                             print_success "UC-955 (IMX462) configured with drivers. System will need to reboot to take effect."
+                            
+                            # Verify configuration after setup
+                            print_info "Verifying UC-955 configuration..."
+                            verify_uc955_configuration
+                            
+                            print_info "After reboot, test the camera with: $0 --test-after-reboot"
                         else
                             print_warning "Driver installation failed, but overlay configured."
                             configure_arducam_uc955
                             print_info "You may need to install drivers manually later using official Arducam guide."
+                            
+                            # Still verify what we can
+                            print_info "Verifying UC-955 configuration..."
+                            verify_uc955_configuration
+                            
+                            print_info "After reboot, test the camera with: $0 --test-after-reboot"
                         fi
                         camera_configured=true
                         ;;
@@ -545,6 +754,118 @@ check_camera_detection() {
     fi
     
     print_success "Camera detection and setup completed"
+}
+
+test_camera_after_reboot() {
+    print_info "Testing camera functionality after reboot..."
+    
+    # Wait a moment for system to stabilize
+    sleep 5
+    
+    # Test basic camera detection
+    print_info "Testing camera detection..."
+    if timeout 10 rpicam-still --list-cameras >/dev/null 2>&1; then
+        print_success "Camera detection working after reboot"
+        
+        # Get camera info
+        local camera_info=$(timeout 10 rpicam-still --list-cameras 2>/dev/null)
+        if [ -n "$camera_info" ]; then
+            print_info "Camera detection output:"
+            echo "$camera_info"
+        fi
+        
+        # Test actual image capture
+        print_info "Testing image capture..."
+        local test_image="/tmp/test_capture.jpg"
+        
+        # First try a simple capture with more debugging
+        print_info "Attempting simple image capture..."
+        if timeout 30 rpicam-still -o "$test_image" --immediate --nopreview --verbose 2>&1; then
+            if [ -f "$test_image" ]; then
+                local file_size=$(stat -c%s "$test_image" 2>/dev/null || echo "0")
+                if [ "$file_size" -gt 1000 ]; then
+                    print_success "Image capture test passed - captured $file_size bytes"
+                    rm -f "$test_image"
+                else
+                    print_warning "Image capture test failed - file too small ($file_size bytes)"
+                fi
+            else
+                print_warning "Image capture test failed - no output file created"
+            fi
+        else
+            local exit_code=$?
+            if [ "$exit_code" -eq 124 ]; then
+                print_warning "Image capture test timed out"
+            elif [ "$exit_code" -eq 134 ]; then
+                print_warning "Image capture test failed with abort (SIGABRT) - possible memory or driver issue"
+                print_info "This may indicate a CMA memory allocation problem or driver compatibility issue"
+            else
+                print_warning "Image capture test failed with exit code $exit_code"
+            fi
+            
+            # Try alternative capture method
+            print_info "Trying alternative capture method with different parameters..."
+            if timeout 30 rpicam-still -o "$test_image" --immediate --nopreview --width 1280 --height 720 2>/dev/null; then
+                if [ -f "$test_image" ]; then
+                    local file_size=$(stat -c%s "$test_image" 2>/dev/null || echo "0")
+                    if [ "$file_size" -gt 1000 ]; then
+                        print_success "Alternative image capture test passed - captured $file_size bytes"
+                        rm -f "$test_image"
+                    else
+                        print_warning "Alternative image capture test failed - file too small ($file_size bytes)"
+                    fi
+                else
+                    print_warning "Alternative image capture test failed - no output file created"
+                fi
+            else
+                print_warning "Alternative image capture test also failed"
+            fi
+        fi
+        
+        # Test WANDA camera detection
+        print_info "Testing WANDA camera detection..."
+        if [ -d "$PROJECT_DIR" ]; then
+            cd "$PROJECT_DIR"
+            if [ -f "venv/bin/activate" ]; then
+                source venv/bin/activate
+                if python3 -c "
+import sys
+sys.path.insert(0, '.')
+from camera.factory import CameraFactory
+try:
+    camera = CameraFactory.create_camera()
+    print(f'Camera type: {type(camera).__name__}')
+    print(f'Camera status: {getattr(camera, \"status\", \"Unknown\")}')
+    if hasattr(camera, 'camera') and hasattr(camera.camera, 'wrapper'):
+        print('Using libcamera subprocess wrapper')
+    else:
+        print('Using direct camera interface')
+except Exception as e:
+    print(f'Camera detection failed: {e}')
+    sys.exit(1)
+"; then
+                    print_success "WANDA camera detection test passed"
+                else
+                    print_warning "WANDA camera detection test failed"
+                fi
+            else
+                print_warning "WANDA virtual environment not found, skipping WANDA test"
+            fi
+        else
+            print_warning "WANDA project directory not found, skipping WANDA test"
+        fi
+        
+    else
+        print_error "Camera detection failed after reboot"
+        print_info "This may indicate a configuration issue. Check the following:"
+        print_info "1. Device tree overlays in /boot/firmware/config.txt"
+        print_info "2. arducam-pivariety.json configuration file"
+        print_info "3. System logs for camera-related errors"
+        
+        # Show recent camera errors
+        print_info "Recent camera-related errors:"
+        sudo journalctl --since "10 minutes ago" | grep -i "arducam\|pivariety\|imx462\|camera\|libcamera" | tail -10
+    fi
 }
 
 check_mount_detection() {
@@ -649,6 +970,14 @@ fi
 # Main verification process
 main() {
     print_banner
+    
+    # Check if we're just testing after reboot
+    if [ "$TEST_AFTER_REBOOT" = "yes" ]; then
+        print_info "Testing camera functionality after reboot..."
+        test_camera_after_reboot
+        return
+    fi
+    
     check_service_status
     check_service_logs
     check_web_interface
