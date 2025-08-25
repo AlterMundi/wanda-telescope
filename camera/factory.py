@@ -8,10 +8,10 @@ import os
 from typing import Optional, Type
 
 from .base import AbstractCamera
-from .detection import get_preferred_camera
-from .exceptions import CameraNotFoundError, CameraInitializationError
+from .exceptions import CameraInitializationError
 from .implementations.mock_camera import MockCamera
 from .implementations.usb_camera import USBCamera
+from .implementations.pi_camera import PiCamera
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,6 @@ class CameraFactory:
         try:
             # First try to detect Raspberry Pi camera
             try:
-                # Import PiCamera only when needed
-                from .implementations.pi_camera import PiCamera
                 import picamera2
                 logger.info("Raspberry Pi camera detected")
                 return PiCamera()
@@ -55,7 +53,6 @@ class CameraFactory:
                 # Fallback: try using rpicam-still command
                 if CameraFactory._check_rpicam_camera():
                     try:
-                        from .implementations.pi_camera import PiCamera
                         logger.info("Raspberry Pi camera detected via rpicam-still, attempting PiCamera initialization")
                         return PiCamera()
                     except Exception as e:
