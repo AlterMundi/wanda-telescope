@@ -7,15 +7,12 @@ import time
 import os
 import cv2
 import numpy as np
-import subprocess
+from picamera2 import Picamera2
+from picamera2.encoders import H264Encoder
+from picamera2.outputs import FileOutput
 from ..base import AbstractCamera
 
 logger = logging.getLogger(__name__)
-
-# Remove direct imports - we'll import these only when needed
-# from picamera2 import Picamera2
-# from picamera2.encoders import H264Encoder
-# from picamera2.outputs import FileOutput
 
 class PiCamera(AbstractCamera):
     """Raspberry Pi camera implementation using picamera2."""
@@ -80,183 +77,6 @@ class PiCamera(AbstractCamera):
             except Exception as e:
                 logger.warning(f"Could not restore original hardware state: {e}")
     
-    def _import_picamera2(self):
-        """Import picamera2 modules only when needed."""
-        # Try multiple import strategies
-        import_strategies = [
-            # Strategy 1: Direct import
-            lambda: (__import__('picamera2').Picamera2, 
-                    __import__('picamera2.encoders').H264Encoder, 
-                    __import__('picamera2.outputs').FileOutput),
-            # Strategy 2: Try system path
-            lambda: self._import_from_system_path(),
-            # Strategy 3: Try subprocess fallback
-            lambda: self._import_via_subprocess()
-        ]
-        
-        for i, strategy in enumerate(import_strategies):
-            try:
-                logger.info(f"Trying picamera2 import strategy {i+1}")
-                return strategy()
-            except Exception as e:
-                logger.warning(f"Import strategy {i+1} failed: {e}")
-                continue
-        
-        # If all strategies fail, raise a clear error
-        error_msg = "picamera2 module not available in any form. "
-        error_msg += "This camera implementation requires a Raspberry Pi with picamera2 installed. "
-        error_msg += "Try: sudo apt install python3-picamera2"
-        raise ImportError(error_msg)
-    
-    def _import_from_system_path(self):
-        """Try to import picamera2 from system Python path."""
-        import sys
-        
-        # Add system picamera2 path
-        sys.path.append('/usr/lib/python3/dist-packages')
-        
-        try:
-            from picamera2 import Picamera2
-            from picamera2.encoders import H264Encoder
-            from picamera2.outputs import FileOutput
-            
-            logger.info("picamera2 imported successfully from system path")
-            return Picamera2, H264Encoder, FileOutput
-            
-        except Exception as e:
-            logger.warning(f"System path import strategy failed: {e}")
-            raise ImportError("Could not import picamera2 from system path")
-    
-    def _import_via_subprocess(self):
-        """Create a subprocess-based wrapper for picamera2 operations."""
-        logger.info("Creating subprocess-based picamera2 wrapper")
-        # This will be a mock object that uses subprocess calls
-        return self._create_subprocess_wrapper()
-    
-    def _create_subprocess_wrapper(self):
-        """Create a wrapper that uses subprocess calls to rpicam commands."""
-        class SubprocessWrapper:
-            def __init__(self):
-                self.camera_info = None
-                self._get_camera_info()
-            
-            def _get_camera_info(self):
-                """Get camera info via subprocess."""
-                try:
-                    result = subprocess.run(['rpicam-still', '--list-cameras'], 
-                                          capture_output=True, text=True, timeout=10)
-                    if result.returncode == 0:
-                        self.camera_info = result.stdout
-                        return True
-                except Exception as e:
-                    logger.warning(f"Failed to get camera info via subprocess: {e}")
-                return False
-            
-            def global_camera_info(self):
-                """Return camera info in expected format."""
-                if self.camera_info:
-                    # Parse the output to create a compatible format
-                    return [{'Model': 'imx477', 'Location': 2, 'Rotation': 180}]
-                return []
-        
-        class MockPicamera2:
-            def __init__(self):
-                self.wrapper = SubprocessWrapper()
-                self.camera_controls = {}
-                self._started = False
-            
-            @staticmethod
-            def global_camera_info():
-                wrapper = SubprocessWrapper()
-                return wrapper.global_camera_info()
-            
-            def create_preview_configuration(self, main=None):
-                """Create preview configuration."""
-                if not main:
-                    main = {"size": (1440, 810)}
-                return {"main": main}
-            
-            def create_still_configuration(self, main=None, raw=None):
-                """Create still image configuration."""
-                if not main:
-                    main = {"size": (4056, 3040)}
-                config = {"main": main}
-                if raw:
-                    config["raw"] = {"size": (4056, 3040)}
-                return config
-            
-            def create_video_configuration(self, main=None):
-                """Create video configuration."""
-                if not main:
-                    main = {"size": (1920, 1080), "format": "RGB888"}
-                return {"main": main}
-            
-            def configure(self, config):
-                """Configure camera settings."""
-                logger.info(f"Mock PiCamera: configure({config})")
-                # Store configuration for later use
-                self._config = config
-            
-            def set_controls(self, controls):
-                """Set camera controls."""
-                logger.info(f"Mock PiCamera: set_controls({controls})")
-                self.camera_controls.update(controls)
-            
-            def start(self):
-                """Start the camera."""
-                logger.info("Mock PiCamera: start()")
-                self._started = True
-            
-            def stop(self):
-                """Stop the camera."""
-                logger.info("Mock PiCamera: stop()")
-                self._started = False
-            
-            def capture_array(self, name="main"):
-                """Capture an array from the camera."""
-                logger.info("Mock PiCamera: capture_array()")
-                # Return a mock image array (black image)
-                import numpy as np
-                return np.zeros((810, 1440, 3), dtype=np.uint8)
-            
-            def capture_file(self, filename, name="main"):
-                """Capture a file from the camera."""
-                logger.info(f"Mock PiCamera: capture_file({filename})")
-                # Use rpicam-still to capture an actual image
-                try:
-                    result = subprocess.run([
-                        'rpicam-still', '-o', filename, '--immediate', '--nopreview'
-                    ], capture_output=True, text=True, timeout=30)
-                    if result.returncode == 0:
-                        logger.info(f"Captured image to {filename}")
-                        return True
-                    else:
-                        logger.error(f"rpicam-still failed: {result.stderr}")
-                        return False
-                except Exception as e:
-                    logger.error(f"Failed to capture image: {e}")
-                    return False
-            
-            def capture_metadata(self, name="main"):
-                """Capture metadata from the camera."""
-                logger.info("Mock PiCamera: capture_metadata()")
-                return {"exposure_time": 100000, "gain": 1.0}
-            
-            def close(self):
-                """Close the camera."""
-                logger.info("Mock PiCamera: close()")
-                self._started = False
-        
-        class MockH264Encoder:
-            def __init__(self):
-                pass
-        
-        class MockFileOutput:
-            def __init__(self, filename):
-                self.filename = filename
-        
-        return MockPicamera2, MockH264Encoder, MockFileOutput
-    
     def initialize(self):
         """Initialize the Pi camera hardware."""
         logger.info("Pi camera: initialize()")
@@ -265,8 +85,6 @@ class PiCamera(AbstractCamera):
         
         for attempt in range(max_retries):
             try:
-                Picamera2, _, _ = self._import_picamera2()
-                
                 # Check if any cameras are available
                 camera_info = Picamera2.global_camera_info()
                 if not camera_info:
@@ -373,9 +191,6 @@ class PiCamera(AbstractCamera):
             raise Exception("Camera not initialized")
         
         try:
-            # Import H264Encoder only when needed
-            _, H264Encoder, FileOutput = self._import_picamera2()
-            
             # Stop current session and reconfigure for video
             if self.started:
                 self.camera.stop()
@@ -662,7 +477,6 @@ class PiCamera(AbstractCamera):
         """Start video recording."""
         try:
             filename = f"{self.capture_dir}/video_{int(time.time())}.mp4"
-            _, H264Encoder, _ = self._import_picamera2()
             encoder = H264Encoder(bitrate=10000000)
             self.start_recording(encoder, filename)
             return True
