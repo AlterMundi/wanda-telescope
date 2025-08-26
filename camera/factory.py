@@ -8,7 +8,6 @@ import os
 from typing import Optional, Type
 
 from .base import AbstractCamera
-from .exceptions import CameraInitializationError
 from .implementations.mock_camera import MockCamera
 from .implementations.usb_camera import USBCamera
 from .implementations.pi_camera import PiCamera
@@ -39,7 +38,7 @@ class CameraFactory:
             AbstractCamera: A camera instance
             
         Raises:
-            CameraInitializationError: If camera initialization fails
+            Exception: If camera initialization fails
         """
         try:
             # First try to detect Raspberry Pi camera
@@ -75,7 +74,7 @@ class CameraFactory:
             return MockCamera()
             
         except Exception as e:
-            raise CameraInitializationError(f"Failed to initialize camera: {str(e)}")
+            raise Exception(f"Failed to initialize camera: {str(e)}")
             
     @staticmethod
     def list_available_cameras():

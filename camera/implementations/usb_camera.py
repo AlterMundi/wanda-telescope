@@ -1,14 +1,13 @@
 """
-USB camera implementation using OpenCV.
+USB Camera implementation using OpenCV.
 """
-import logging
 import cv2
 import numpy as np
 import math
-import time
+import logging
+from typing import Tuple, Optional, Any, Dict
+
 from ..base import AbstractCamera
-from ..exceptions import CameraInitializationError, CameraNotConnectedError
-from typing import Tuple, Optional, Any
 
 # Handle different OpenCV versions for VideoWriter_fourcc
 fourcc = getattr(cv2, 'VideoWriter_fourcc', lambda *args: 0x7634706d)
@@ -258,10 +257,10 @@ class USBCamera(AbstractCamera):
             Tuple[bool, Optional[Any]]: Success status and image data if successful
             
         Raises:
-            CameraNotConnectedError: If camera is not initialized
+            Exception: If camera is not initialized
         """
         if not self.is_connected:
-            raise CameraNotConnectedError("Camera not initialized")
+            raise Exception("Camera not initialized")
         try:
             # Implementation will go here
             return False, None

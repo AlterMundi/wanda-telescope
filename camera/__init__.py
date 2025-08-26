@@ -20,22 +20,8 @@ Example usage:
 
 from .factory import CameraFactory
 from .base import AbstractCamera
-from .exceptions import (
-    CameraError,
-    CameraInitializationError,
-    CameraNotFoundError,
-    CameraNotConnectedError,
-    CaptureError,
-    UnsupportedFeatureError
-)
 
 __all__ = [
     'CameraFactory',
-    'AbstractCamera',
-    'CameraError',
-    'CameraInitializationError',
-    'CameraNotFoundError',
-    'CameraNotConnectedError',
-    'CaptureError',
-    'UnsupportedFeatureError'
+    'AbstractCamera'
 ]

@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 from camera.factory import CameraFactory
 from camera.implementations.mock_camera import MockCamera
 from camera.implementations.usb_camera import USBCamera
-from camera.exceptions import CameraInitializationError
 
 class TestCameraFactory:
     def test_create_camera_returns_mock_when_no_hardware(self):
@@ -91,7 +90,7 @@ class TestCameraFactory:
             # Mock PiCamera constructor to raise an exception when instantiated
             with patch("camera.implementations.pi_camera.PiCamera", side_effect=Exception("PiCamera initialization error")):
                 with patch.dict("sys.modules", {"picamera2": Mock()}):
-                    with pytest.raises(CameraInitializationError) as exc_info:
+                    with pytest.raises(Exception) as exc_info:
                         CameraFactory.create_camera()
                     assert "Failed to initialize camera" in str(exc_info.value)
 
