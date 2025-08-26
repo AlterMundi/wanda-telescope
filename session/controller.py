@@ -9,11 +9,6 @@ import threading
 import glob
 from datetime import datetime
 from typing import Optional, Dict, Any
-from .exceptions import (
-    SessionError,
-    SessionAlreadyRunningError,
-    SessionConfigurationError
-)
 
 logger = logging.getLogger(__name__)
 
@@ -68,19 +63,18 @@ class SessionController:
             bool: True if session started successfully
             
         Raises:
-            SessionAlreadyRunningError: If a session is already running
-            SessionConfigurationError: If configuration is invalid
+            Exception: If a session is already running or configuration is invalid
         """
         with self._session_lock:
             if self.session_running:
-                raise SessionAlreadyRunningError("A session is already running")
+                raise Exception("A session is already running")
             
             # Validate configuration
             if not name or not name.strip():
-                raise SessionConfigurationError("Session name cannot be empty")
+                raise Exception("Session name cannot be empty")
             
             if total_images <= 0:
-                raise SessionConfigurationError("Total images must be greater than 0")
+                raise Exception("Total images must be greater than 0")
             
             # Create session directory
             session_dir = os.path.join(self.base_capture_dir, name)
@@ -88,7 +82,7 @@ class SessionController:
             try:
                 os.makedirs(session_dir, exist_ok=True)
             except Exception as e:
-                raise SessionConfigurationError(f"Failed to create session directory: {str(e)}")
+                raise Exception(f"Failed to create session directory: {str(e)}")
             
             # Configure session
             self.session_config.update({

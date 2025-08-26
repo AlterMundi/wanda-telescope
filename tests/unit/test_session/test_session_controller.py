@@ -10,7 +10,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from session.controller import SessionController
-from session.exceptions import SessionAlreadyRunningError, SessionConfigurationError
 
 class TestSessionController:
     """Test cases for SessionController class."""
@@ -80,24 +79,29 @@ class TestSessionController:
             session_controller.start_session("test1", 5)
         
         # Try to start second session
-        with pytest.raises(SessionAlreadyRunningError):
+        with pytest.raises(Exception) as exc_info:
             session_controller.start_session("test2", 5)
+        assert "A session is already running" in str(exc_info.value)
     
     def test_start_session_invalid_name(self, session_controller):
         """Test starting session with invalid name."""
-        with pytest.raises(SessionConfigurationError):
+        with pytest.raises(Exception) as exc_info:
             session_controller.start_session("", 5)
+        assert "Session name cannot be empty" in str(exc_info.value)
         
-        with pytest.raises(SessionConfigurationError):
+        with pytest.raises(Exception) as exc_info:
             session_controller.start_session("   ", 5)
+        assert "Session name cannot be empty" in str(exc_info.value)
     
     def test_start_session_invalid_total_images(self, session_controller):
         """Test starting session with invalid total images."""
-        with pytest.raises(SessionConfigurationError):
+        with pytest.raises(Exception) as exc_info:
             session_controller.start_session("test", 0)
+        assert "Total images must be greater than 0" in str(exc_info.value)
         
-        with pytest.raises(SessionConfigurationError):
+        with pytest.raises(Exception) as exc_info:
             session_controller.start_session("test", -1)
+        assert "Total images must be greater than 0" in str(exc_info.value)
     
     def test_start_session_with_tracking(self, session_controller, mock_mount):
         """Test starting session with mount tracking enabled."""
@@ -116,7 +120,7 @@ class TestSessionController:
     def test_start_session_directory_creation_failure(self, session_controller):
         """Test session start when directory creation fails."""
         with patch('session.controller.os.makedirs', side_effect=OSError("Permission denied")):
-            with pytest.raises(SessionConfigurationError) as exc_info:
+            with pytest.raises(Exception) as exc_info:
                 session_controller.start_session("test", 5)
             
             assert "Failed to create session directory" in str(exc_info.value)

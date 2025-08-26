@@ -19,17 +19,7 @@ Example usage:
 """
 
 from .controller import SessionController
-from .exceptions import (
-    SessionError,
-    SessionAlreadyRunningError,
-    SessionNotFoundError,
-    SessionConfigurationError
-)
 
 __all__ = [
-    'SessionController',
-    'SessionError',
-    'SessionAlreadyRunningError',
-    'SessionNotFoundError',
-    'SessionConfigurationError'
+    'SessionController'
 ] 
