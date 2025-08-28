@@ -27,7 +27,9 @@ class WandaApp:
                          template_folder=template_dir,
                          static_folder=static_dir)
                          
-        self.camera = camera if camera else CameraFactory.create_camera()
+        if camera is None:
+            raise ValueError("Camera instance is required")
+        self.camera = camera
         self.mount = MountController()
         self.session_controller = SessionController(self.camera, self.mount, self.camera.capture_dir)
         self.setup_routes()
