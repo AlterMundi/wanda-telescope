@@ -34,41 +34,45 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 
 ### Manual Setup
 
-Manual installation:
+Manual installation for Raspberry Pi with IMX477 camera:
 
 ```bash
 
-##Update
-sudo apt update 
+## Update system
+sudo apt update
 sudo apt upgrade
 
-## Modify congig file for camera sensor imx477:
-sudo nano sudo nano /boot/firmware/config.txt
+## Configure camera sensor (IMX477)
+sudo nano /boot/firmware/config.txt
 
+# Add these lines under the [all] section:
 # Disable camera autodetection:
 camera_auto_detect=0
 
-# Add IMX477 overlay under the [all] section: 
+# Enable IMX477 camera:
 dtoverlay=imx477
 
-#reboot
+# Save and exit, then reboot
 sudo reboot
 
-# To test if the camera is correctly detected:
+## Test camera detection after reboot
 rpicam-still --list-cameras
 
-##Install dependencies: 
+## Install system dependencies
+# Note: python3-picamera2 must be installed as system package before creating venv
 sudo apt install git python3-libcamera python3-picamera2
 
 ## Clone repository
 git clone https://github.com/AlterMundi/wanda-telescope.git
 cd wanda-telescope
 
-## Create virtual environment
-python3 -m venv venv
+## Create virtual environment with system package access
+# (Required for picamera2 which is installed as system package)
+# Note: Without --system-site-packages, venv cannot access picamera2
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 
-## Install dependencies
+## Install Python dependencies
 pip install -r requirements.txt
 
 ## Run WANDA
@@ -187,8 +191,9 @@ pytest tests/web/          # Web interface tests
 
 ### Development Environment
 ```bash
-# Create virtual environment
-python3 -m venv venv
+# Create virtual environment with system package access
+# (Required for picamera2 on Raspberry Pi)
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 
 # Install dependencies
