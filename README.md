@@ -57,12 +57,12 @@ sudo reboot
 # To test if the camera is correctly detected:
 rpicam-still --list-cameras
 
+##Install dependencies: 
+sudo apt install git python3-libcamera python3-picamera2
+
 ## Clone repository
 git clone https://github.com/AlterMundi/wanda-telescope.git
 cd wanda-telescope
-
-##Install dependencies: 
-sudo apt install git python3-libcamera python3-picamera2
 
 ## Create virtual environment
 python3 -m venv venv
