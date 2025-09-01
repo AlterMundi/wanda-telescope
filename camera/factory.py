@@ -2,10 +2,14 @@
 Camera factory module for creating camera instances.
 """
 import logging
-import cv2
 import subprocess
 import os
 from typing import Optional, Type
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 from .base import AbstractCamera
 from .implementations.mock_camera import MockCamera
@@ -59,6 +63,8 @@ class CameraFactory:
             
             # Then try to detect USB camera
             try:
+                if cv2 is None:
+                    raise ImportError("cv2 not available")
                 cap = cv2.VideoCapture(0)
                 if cap.isOpened():
                     ret, _ = cap.read()
@@ -75,9 +81,3 @@ class CameraFactory:
             
         except Exception as e:
             raise Exception(f"Failed to initialize camera: {str(e)}")
-            
-    @staticmethod
-    def list_available_cameras():
-        """List all available cameras in the system."""
-        from .detection import get_available_cameras
-        return get_available_cameras() 
