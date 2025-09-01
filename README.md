@@ -31,56 +31,47 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 - **Tracking Speed**: Adjustable for sidereal rate and custom speeds
 - **Mock Mount**: Testing mount logic without physical hardware
 
-## Quick Start
 
-### One-Command Installation (Recommended)
+### Manual Setup
 
-The easiest way to get WANDA running on a fresh Raspberry Pi OS Lite:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/install.sh | bash
-```
-
-This single command will:
-- ✅ Install all system dependencies (OpenCV, Pi camera libraries, GPIO)
-- ✅ Clone the WANDA Telescope repository
-- ✅ Set up Python virtual environment
-- ✅ Install all Python dependencies
-- ✅ Configure systemd service for auto-startup
-- ✅ Automatically reboot to start WANDA Telescope
-- ✅ Enable auto-startup on boot
-
-### Post-Installation Verification
-
-After the system reboots, verify everything is working correctly:
+Manual installation:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlterMundi/wanda-telescope/main/scripts/post-install.sh | bash
-```
 
-This verification script will:
-- ✅ Check service status and logs
-- ✅ Verify web interface accessibility
-- ✅ Test camera and mount detection
-- ✅ Provide comprehensive status report
+##Update
+sudo apt update 
+sudo apt upgrade
 
-### Manual Setup (Alternative)
+## Modify congig file for camera sensor imx477:
+sudo nano sudo nano /boot/firmware/config.txt
 
-If you prefer manual installation:
+# Disable camera autodetection:
+camera_auto_detect=0
 
-```bash
-# Clone repository
+# Add IMX477 overlay under the [all] section: 
+dtoverlay=imx477
+
+#reboot
+sudo reboot
+
+# To test if the camera is correctly detected:
+rpicam-still --list-cameras
+
+## Clone repository
 git clone https://github.com/AlterMundi/wanda-telescope.git
 cd wanda-telescope
 
-# Create virtual environment
+##Install dependencies: 
+sudo apt install git python3-libcamera python3-picamera2
+
+## Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies
+## Install dependencies
 pip install -r requirements.txt
 
-# Run WANDA
+## Run WANDA
 python main.py
 ```
 
