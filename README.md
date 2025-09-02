@@ -49,8 +49,11 @@ sudo nano /boot/firmware/config.txt
 # Disable camera autodetection:
 camera_auto_detect=0
 
-# Enable IMX477 camera:
+# Enable IMX477 camera under the [all] section:
 dtoverlay=imx477
+
+#For Pi 5 with cameras connected to CAM0 port, use: 
+dtoverlay=imx477,cam0
 
 # Save and exit, then reboot
 sudo reboot
