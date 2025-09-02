@@ -280,7 +280,6 @@ class PiCamera(AbstractCamera):
             array = self.camera.capture_array()
             
             # Convert array to image and save
-            import cv2
             # Convert from RGB to BGR for OpenCV
             if len(array.shape) == 3 and array.shape[2] == 3:
                 array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
