@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import math
 import logging
+import time
 from typing import Tuple, Optional, Any, Dict
 
 from ..base import AbstractCamera
@@ -252,15 +253,12 @@ class USBCamera(AbstractCamera):
     
     def capture_image(self) -> Tuple[bool, Optional[Any]]:
         """Capture an image from the USB camera.
-        
+
         Returns:
             Tuple[bool, Optional[Any]]: Success status and image data if successful
-            
-        Raises:
-            Exception: If camera is not initialized
         """
         if not self.is_connected:
-            raise Exception("Camera not initialized")
+            return False, None
         try:
             # Implementation will go here
             return False, None
@@ -289,17 +287,18 @@ class USBCamera(AbstractCamera):
     
     def us_to_shutter_string(self, us):
         """Convert microseconds to a human-readable shutter speed string.
-        
+
         Args:
             us: Exposure time in microseconds
-            
+
         Returns:
-            str: Human-readable shutter speed (e.g., "1/1000")
+            str: Human-readable shutter speed (e.g., "1/1000" or "0.5s")
         """
-        if us >= 1000000:  # 1 second or longer
-            return f"{us/1000000:.1f}s"
+        seconds = us / 1000000.0
+        if seconds >= 0.1:  # 0.1 second or longer - show as decimal seconds
+            return f"{seconds:.1f}s"
         else:
-            return f"1/{int(1000000/us)}"
+            return f"1/{int(1.0/seconds)}"
     
     def gain_to_iso(self, gain):
         """Convert gain value to ISO equivalent.
