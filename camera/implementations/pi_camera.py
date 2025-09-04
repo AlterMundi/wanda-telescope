@@ -68,14 +68,14 @@ class PiCamera(AbstractCamera):
                 # Restore original controls
                 if 'controls' in self._original_hardware_state:
                     self.camera.set_controls(self._original_hardware_state['controls'])
-                
-                # Restore exposure mode
-                if 'exposure_mode' in self._original_hardware_state:
-                    self.exposure_mode = self._original_hardware_state['exposure_mode']
-                
+
                 logger.info("Restored original Pi camera hardware state")
             except Exception as e:
                 logger.warning(f"Could not restore original hardware state: {e}")
+            finally:
+                # Always try to restore exposure mode, even if controls failed
+                if 'exposure_mode' in self._original_hardware_state:
+                    self.exposure_mode = self._original_hardware_state['exposure_mode']
     
     def initialize(self):
         """Initialize the Pi camera hardware."""
