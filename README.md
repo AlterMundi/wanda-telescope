@@ -354,8 +354,9 @@ git checkout -b feat/your-feature
 # Set up development environment
 ./scripts/run-wanda.sh --setup-only
 
-# Run tests
-pytest
+# Run tests with coverage
+pytest tests/ --cov=camera.implementations --cov=camera.factory --cov=main --cov=web.app --cov=session.controller --cov-report=term-missing --cov-report=term --tb=short
+
 
 # Make changes and test
 # Submit pull request

@@ -1,7 +1,7 @@
 [tool:pytest]
 testpaths = tests
 python_files = test_*.py
-addopts = -v --tb=short
+addopts = -v --cov=camera --cov=main --cov=web --cov=session --cov-report=term-missing --cov-report=term --tb=short
 markers =
     unit: Unit tests
     integration: Integration tests
