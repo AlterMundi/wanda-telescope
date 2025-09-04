@@ -184,12 +184,9 @@ WANDA automatically manages storage with intelligent fallback:
 pytest
 
 # Run with coverage
-pytest --cov=camera,mount,web,utils
+pytest tests/ --cov=camera.implementations --cov=camera.factory --cov=main --cov=web.app --cov=session.controller --cov-report=term-missing --cov-report=term --tb=short
 
-# Run specific test categories
-pytest tests/unit/          # Unit tests
-pytest tests/integration/   # Integration tests
-pytest tests/web/          # Web interface tests
+
 ```
 
 ### Development Environment
@@ -209,43 +206,6 @@ pip install pytest pytest-cov
 python main.py
 ```
 
-## Configuration
-
-Main configuration in `config.py`:
-- **Camera settings**: Resolution, exposure limits, gain ranges
-- **Mount settings**: GPIO pins, step sequences, tracking speeds
-- **Storage paths**: Capture directories and USB drive preferences
-- **Web server settings**: Host address, port number, debug mode
-
-## Service Management
-
-### Auto-Startup
-WANDA automatically starts on boot via systemd service:
-```bash
-# Check service status
-sudo systemctl status wanda-telescope
-
-# View logs
-sudo journalctl -u wanda-telescope -f
-
-# Restart service
-sudo systemctl restart wanda-telescope
-
-# Disable auto-startup
-sudo systemctl disable wanda-telescope
-```
-
-### Manual Control
-```bash
-# Start manually
-cd ~/wanda-telescope
-source venv/bin/activate
-python main.py
-
-# Stop service
-sudo systemctl stop wanda-telescope
-```
-
 ## File Structure
 
 ```
@@ -253,15 +213,19 @@ wanda-telescope/
 ├── main.py                    # Application entry point
 ├── config.py                  # Configuration settings
 ├── requirements.txt           # Python dependencies
+├── pytest.ini               # Pytest configuration
+├── run_tests_with_coverage.sh # Test runner script
 ├── camera/                    # Camera system modules
+│   ├── __init__.py           # Camera package initialization
 │   ├── base.py               # Abstract camera interface
 │   ├── factory.py            # Camera factory and detection
-│   ├── exceptions.py         # Camera-specific exceptions
 │   └── implementations/      # Camera implementations
+│       ├── __init__.py       # Implementations package init
 │       ├── pi_camera.py      # Raspberry Pi camera
 │       ├── usb_camera.py     # USB camera support
 │       └── mock_camera.py    # Mock camera for development
 ├── mount/                     # Mount control system
+│   ├── __init__.py           # Mount package initialization
 │   ├── base.py               # Abstract mount interface
 │   ├── factory.py            # Mount factory
 │   ├── controller.py         # Mount controller logic
@@ -269,97 +233,77 @@ wanda-telescope/
 │       ├── pi_mount.py       # Raspberry Pi GPIO mount
 │       └── mock_mount.py     # Mock mount for development
 ├── session/                   # Session management
-│   ├── controller.py         # Session controller
-│   └── exceptions.py         # Session exceptions
+│   ├── __init__.py           # Session package initialization
+│   └── controller.py         # Session controller
 ├── web/                       # Web interface
+│   ├── __init__.py           # Web package initialization
 │   ├── app.py                # Flask application
 │   ├── templates/            # HTML templates
-│   └── static/               # CSS, JavaScript, images
+│   │   ├── base.html         # Base template
+│   │   ├── index.html        # Main page
+│   │   └── components/       # Reusable components
+│   │       ├── camera-controls.html
+│   │       ├── mount-controls.html
+│   │       └── session-controls.html
+│   └── static/               # Static assets
+│       ├── css/              # Stylesheets
+│       │   ├── main.css
+│       │   ├── components.css
+│       │   └── modern-ui.css
+│       ├── js/               # JavaScript files
+│       │   ├── ajax-utils.js
+│       │   ├── camera-controls.js
+│       │   ├── modern-ui.js
+│       │   ├── mount-controls.js
+│       │   ├── session-controls.js
+│       │   └── utils.js
+│       └── img/              # Images
+│           └── favicon.ico
 ├── utils/                     # Utility functions
+│   ├── __init__.py           # Utils package initialization
 │   └── storage.py            # Storage management
 ├── dev_tools/                 # Development tools
-│   ├── mock_picamera2.py     # Mock picamera2
-│   └── mock_rpi_gpio.py      # Mock RPi.GPIO
+│   └── __init__.py           # Dev tools package initialization
+├── docs/                      # Documentation
+│   ├── ARDUCAM_UC955_SETUP.md
+│   ├── AUTO_STARTUP_README.md
+│   ├── camera_state_restoration.md
+│   ├── DEV_DEPLOYMENT.md
+│   ├── NETWORK_DISCOVERY.md
+│   ├── RASPBERRY_PI_ECOSYSTEM_LIMITATIONS.md
+│   └── test_capture_isolation.md
 ├── tests/                     # Test suite
-│   ├── unit/                 # Unit tests
-│   ├── integration/          # Integration tests
-│   └── web/                  # Web interface tests
-└── scripts/                   # Deployment and utility scripts
-    ├── install.sh            # One-command installation
-    ├── post-install.sh       # Post-installation verification
-    ├── deploy-to-pi.sh       # Legacy one-command deployment
-    ├── install-service.sh     # Service installation
-    └── run-wanda.sh          # Development runner
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Camera Detection Problems
-```bash
-# Check camera detection
-python3 -c "from camera.factory import CameraFactory; print(CameraFactory.detect_camera())"
-
-# Verify Pi camera connection
-vcgencmd get_camera
-
-# Check USB camera
-lsusb | grep -i camera
-```
-
-#### Service Issues
-```bash
-# Check service logs
-sudo journalctl -u wanda-telescope -f
-
-# Verify service configuration
-sudo systemctl cat wanda-telescope
-
-# Test manual startup
-cd ~/wanda-telescope && source venv/bin/activate && python main.py
-```
-
-#### Network Access
-- Ensure Pi and device are on same network
-- Check firewall settings
-- Verify port 5000 is accessible
-- Use `hostname -I` to find Pi's IP address
-
-### Performance Optimization
-- Use USB 3.0 for external storage
-- Enable GPU memory split for Pi camera
-- Optimize camera resolution for your use case
-- Monitor CPU usage during capture sessions
-
-## Contributing
-
-We welcome contributions! Please follow our development guidelines:
-
-1. **Fork the repository** and create a feature branch
-2. **Write tests first** following TDD methodology
-3. **Ensure test coverage** meets 85% minimum
-4. **Follow code quality standards** (simplicity, no duplication)
-5. **Submit a pull request** with clear description
-
-### Development Setup
-```bash
-# Fork and clone
-git clone https://github.com/yourusername/wanda-telescope.git
-cd wanda-telescope
-
-# Create feature branch
-git checkout -b feat/your-feature
-
-# Set up development environment
-./scripts/run-wanda.sh --setup-only
-
-# Run tests with coverage
-pytest tests/ --cov=camera.implementations --cov=camera.factory --cov=main --cov=web.app --cov=session.controller --cov-report=term-missing --cov-report=term --tb=short
-
-
-# Make changes and test
-# Submit pull request
+│   ├── __init__.py           # Tests package initialization
+│   ├── test_main.py          # Main application tests
+│   ├── test_camera/          # Camera system tests
+│   │   ├── __init__.py
+│   │   ├── test_camera_factory.py
+│   │   └── test_implementations/
+│   │       ├── __init__.py
+│   │       ├── test_pi_camera.py
+│   │       ├── test_usb_camera.py
+│   │       └── captures/     # Test capture files
+│   ├── test_session/         # Session management tests
+│   │   ├── __init__.py
+│   │   └── test_controller.py
+│   └── test_web/             # Web interface tests
+│       ├── __init__.py
+│       └── test_app.py
+├── scripts/                   # Deployment and utility scripts
+│   ├── announce-ip.sh        # Network discovery announcement
+│   ├── deploy-to-pi.sh       # Legacy one-command deployment
+│   ├── find-wanda.py         # Network discovery finder
+│   ├── install-service.sh    # Service installation
+│   ├── install.sh            # One-command installation
+│   ├── post-install.sh       # Post-installation verification
+│   ├── quick-start.sh        # Quick start script
+│   ├── run-wanda.sh          # Development runner
+│   ├── uninstall-service.sh  # Service uninstallation
+│   └── wanda-service.sh      # Service definition
+├── captures/                  # Captured images directory
+├── htmlcov/                   # Coverage report output
+├── venv/                      # Virtual environment
+└── session_metadata.json     # Session metadata storage
 ```
 
 ## License
