@@ -121,11 +121,15 @@ class USBCamera(AbstractCamera):
         
         for key, value in settings.items():
             if hasattr(cv2, key.upper()):
-                self.camera.set(getattr(cv2, key.upper()), value)
-                if key == 'gain':
-                    self.gain = value
-                elif key == 'exposure':
-                    self.exposure_us = value * 1000  # Convert ms to us
+                try:
+                    self.camera.set(getattr(cv2, key.upper()), value)
+                    if key == 'gain':
+                        self.gain = value
+                    elif key == 'exposure':
+                        self.exposure_us = value * 1000  # Convert ms to us
+                except Exception as e:
+                    logger.warning(f"Failed to configure {key} to {value}: {e}")
+                    # Continue with other settings rather than failing completely
     
     def create_preview_configuration(self):
         """Create preview configuration."""
@@ -157,14 +161,18 @@ class USBCamera(AbstractCamera):
         logger.info(f"USB camera: set_controls({kwargs})")
         if not self.camera:
             raise Exception("Camera not initialized")
-        
+
         for key, value in kwargs.items():
             if hasattr(cv2, key.upper()):
-                self.camera.set(getattr(cv2, key.upper()), value)
-                if key == 'gain':
-                    self.gain = value
-                elif key == 'exposure':
-                    self.exposure_us = value * 1000  # Convert ms to us
+                try:
+                    self.camera.set(getattr(cv2, key.upper()), value)
+                    if key == 'gain':
+                        self.gain = value
+                    elif key == 'exposure':
+                        self.exposure_us = value * 1000  # Convert ms to us
+                except Exception as e:
+                    logger.warning(f"Failed to set {key} to {value}: {e}")
+                    # Continue with other controls rather than failing completely
     
     def start(self):
         """Start the camera."""
