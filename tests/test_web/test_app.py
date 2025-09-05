@@ -354,7 +354,8 @@ class TestWandaApp:
             name='Test Session',
             total_images=10,
             use_current_settings=True,
-            enable_tracking=True
+            enable_tracking=True,
+            total_time_hours=None
         )
 
     def test_start_session_missing_name(self, client, app_instance):
@@ -393,6 +394,81 @@ class TestWandaApp:
         data = json.loads(response.data)
         assert data['success'] is False
         assert 'Test error' in data['error']
+
+    def test_start_session_with_time_based(self, client, app_instance):
+        """Test successful session start with time-based capture."""
+        app_instance.session_controller.start_session.return_value = True
+
+        response = client.post('/start_session', data={
+            'session_name': 'Time Session',
+            'total_images': '10',
+            'total_time_hours': '4',
+            'total_time_minutes': '30',
+            'use_current_settings': 'on'
+        })
+
+        assert response.status_code == 200
+        assert response.content_type == 'application/json'
+        data = json.loads(response.data)
+        assert data['success'] is True
+        assert 'session_status' in data
+
+        app_instance.session_controller.start_session.assert_called_once_with(
+            name='Time Session',
+            total_images=10,
+            use_current_settings=True,
+            enable_tracking=False,
+            total_time_hours=4.5  # 4 hours + 30 minutes = 4.5 hours
+        )
+
+    def test_start_session_zero_time_hours(self, client, app_instance):
+        """Test session start with zero time hours."""
+        response = client.post('/start_session', data={
+            'session_name': 'Test Session',
+            'total_images': '10',
+            'total_time_hours': '0',
+            'total_time_minutes': '0'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'Total time must be greater than 0' in data['error']
+
+    def test_start_session_negative_time_hours(self, client, app_instance):
+        """Test session start with negative time hours."""
+        response = client.post('/start_session', data={
+            'session_name': 'Test Session',
+            'total_images': '10',
+            'total_time_hours': '-1'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'Total time must be greater than 0' in data['error']
+
+    def test_start_session_invalid_time_hours(self, client, app_instance):
+        """Test session start with invalid time hours format."""
+        response = client.post('/start_session', data={
+            'session_name': 'Test Session',
+            'total_images': '10',
+            'total_time_hours': 'not_a_number'
+        })
+
+        # When form.get('total_time_hours', type=float) fails to parse, it returns None
+        # which should be handled gracefully (None is valid for non-time-based sessions)
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['success'] is True  # Should succeed as None is valid
+
+        app_instance.session_controller.start_session.assert_called_once_with(
+            name='Test Session',
+            total_images=10,
+            use_current_settings=False,
+            enable_tracking=False,
+            total_time_hours=None
+        )
 
     def test_stop_session_success(self, client, app_instance):
         """Test successful session stop."""

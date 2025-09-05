@@ -11,14 +11,34 @@ from camera import CameraFactory
 # Configure logging
 def setup_logging():
     """Set up logging configuration."""
+    # Create a more robust logging configuration
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    
+    # File handler with error handling
+    try:
+        file_handler = logging.FileHandler('wanda.log')
+        file_handler.setFormatter(formatter)
+        handlers = [console_handler, file_handler]
+    except Exception as e:
+        print(f"Warning: Could not create log file handler: {e}")
+        handlers = [console_handler]
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('wanda.log')
-        ]
+        handlers=handlers,
+        force=True  # Force reconfiguration to avoid conflicts
     )
+    
+    # Ensure all handlers are properly configured
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        handler.setFormatter(formatter)
+    
     return logging.getLogger(__name__)
 
 def initialize_camera():
@@ -68,6 +88,13 @@ def signal_handler(sig, frame):
             print("Camera restored to original state and cleaned up")
         except Exception as e:
             print(f"Error during camera cleanup: {e}")
+    
+    # Flush all logging handlers before exit
+    try:
+        logging.shutdown()
+    except Exception as e:
+        print(f"Error during logging shutdown: {e}")
+    
     sys.exit(0)
 
 def main():

@@ -8,8 +8,14 @@
             <input type="text" name="session_name" placeholder="e.g., moon_sequence" required>
         </p>
         <p>
-            Total Images: 
+            Total Images:
             <input type="number" name="total_images" min="1" max="1000" value="10" required>
+        </p>
+        <p>
+            Total Time (optional):
+            <input type="number" name="total_time_hours" min="0" max="99" placeholder="Hours" style="width: 80px;">
+            <input type="number" name="total_time_minutes" min="0" max="59" placeholder="Minutes" style="width: 80px;">
+            <small style="color: #666; display: block; margin-top: 4px;">Leave empty for standard timing between captures</small>
         </p>
         <div class="toggle-container">
             <label class="toggle-option">
@@ -45,6 +51,7 @@
             <div id="session-name"></div>
             <div id="session-count">0 / 0 images</div>
             <div id="session-time">Elapsed: 0s</div>
+            <div id="session-time-info" style="display: none;"></div>
         </div>
     </div>
     

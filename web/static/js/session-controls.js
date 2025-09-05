@@ -165,25 +165,41 @@ const SessionControls = {
         const sessionName = document.getElementById('session-name');
         const sessionCount = document.getElementById('session-count');
         const sessionTime = document.getElementById('session-time');
-        
+        const sessionTimeInfo = document.getElementById('session-time-info');
+
         if (progressFill) {
             progressFill.style.width = sessionStatus.progress + '%';
         }
-        
+
         if (progressText) {
             progressText.textContent = sessionStatus.progress + '%';
         }
-        
+
         if (sessionName) {
             sessionName.textContent = 'Session: ' + sessionStatus.name;
         }
-        
+
         if (sessionCount) {
             sessionCount.textContent = sessionStatus.images_captured + ' / ' + sessionStatus.total_images + ' images';
         }
-        
+
         if (sessionTime) {
             sessionTime.textContent = 'Elapsed: ' + this.formatTime(sessionStatus.elapsed_time);
+        }
+
+        // Show time-based session information
+        if (sessionTimeInfo) {
+            if (sessionStatus.formatted_time) {
+                let timeInfo = sessionStatus.formatted_time + ' total';
+                if (sessionStatus.estimated_completion) {
+                    const completionTime = new Date(sessionStatus.estimated_completion * 1000);
+                    timeInfo += ' | Est. completion: ' + completionTime.toLocaleTimeString();
+                }
+                sessionTimeInfo.textContent = timeInfo;
+                sessionTimeInfo.style.display = 'block';
+            } else {
+                sessionTimeInfo.style.display = 'none';
+            }
         }
     },
     

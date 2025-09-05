@@ -334,6 +334,18 @@ class WandaApp:
             total_images = request.form.get('total_images', type=int)
             use_current_settings = 'use_current_settings' in request.form
             enable_tracking = 'enable_tracking' in request.form
+
+            # Handle time parameters (hours and minutes)
+            total_time_hours = request.form.get('total_time_hours', type=int)
+            total_time_minutes = request.form.get('total_time_minutes', type=int)
+
+            # Convert to total hours if both are provided
+            if total_time_hours is not None or total_time_minutes is not None:
+                hours = total_time_hours or 0
+                minutes = total_time_minutes or 0
+                total_time_hours = hours + (minutes / 60.0)
+            else:
+                total_time_hours = None
             
             # Validate required parameters
             if not name:
@@ -341,13 +353,17 @@ class WandaApp:
             
             if not total_images or total_images <= 0:
                 return jsonify({'success': False, 'error': 'Total images must be greater than 0'})
+
+            if total_time_hours is not None and total_time_hours <= 0:
+                return jsonify({'success': False, 'error': 'Total time must be greater than 0'})
             
             # Start the session
             success = self.session_controller.start_session(
                 name=name,
                 total_images=total_images,
                 use_current_settings=use_current_settings,
-                enable_tracking=enable_tracking
+                enable_tracking=enable_tracking,
+                total_time_hours=total_time_hours if total_time_hours and total_time_hours > 0 else None
             )
             
             return jsonify({
