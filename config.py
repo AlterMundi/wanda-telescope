@@ -13,7 +13,7 @@ USE_DIGITAL_GAIN = False
 SAVE_RAW = False
 
 # Image/Video configurations
-PREVIEW_SIZE = (1440, 810)  # 16:9 aspect ratio for preview
+PREVIEW_SIZE = (1440, 1080)  # 4:3 aspect ratio for preview
 STILL_SIZE = (4056, 2282)   # 16:9 aspect ratio for stills (closest to max resolution)
 VIDEO_SIZE = (1920, 1080)   # Full HD 16:9 for video
 VIDEO_BITRATE = 10000000    # 10 Mbps video bitrate

@@ -83,13 +83,13 @@ h1, h2 {
     margin-top: 0;
 }
 .camera-viewport {
-    width: 90%;
-    max-width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #111;
+    width: 95%;
+    max-width: 95%;
+    max-height: 100%;
+    aspect-ratio: 4 / 3;
+    background: #ffffff00;
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 0 12px #0006;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -101,17 +101,19 @@ h1, h2 {
     border-radius: 8px;
 }
 
-@supports not (aspect-ratio: 16 / 9) {
+@supports not (aspect-ratio: 4 / 3) {
   .camera-viewport {
     position: relative;
-    width: 90%;
-    max-width: 100%;
-    padding-top: 56.25%; /* 16:9 ratio fallback */
+    width: 95%;
+    max-width: 95%;
+    max-height: 100%;
+    padding-top: 71.25%; /* 4:3 ratio fallback (95% * 0.75) */
     height: 0;
   }
   .camera-viewport img {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: contain;
   }
 }
 
@@ -173,7 +175,8 @@ input[type="range"] {
         border-radius: 12px 12px 0 0;
     }
     .camera-viewport {
-        width: 100vw;
+        width: 100%;
         height: 40vh;
+        max-height: 70vh;
     }
 }

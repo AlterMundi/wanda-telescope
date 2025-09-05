@@ -252,7 +252,7 @@ class TestPiCamera:
     def test_create_preview_configuration_default(self, mock_picamera2_class):
         """Test create_preview_configuration with default parameters."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'size': (1440, 810)}
+        mock_config = {'size': (1440, 1080)}
         mock_camera_instance.create_preview_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -260,7 +260,7 @@ class TestPiCamera:
 
         result = camera.create_preview_configuration()
 
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 810)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
         assert result == mock_config
 
     @patch('camera.implementations.pi_camera.Picamera2')
@@ -402,7 +402,7 @@ class TestPiCamera:
     def test_start(self, mock_picamera2_class):
         """Test start."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (1440, 810)}}
+        mock_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_preview_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -411,7 +411,7 @@ class TestPiCamera:
         camera.start()
 
         # Verify camera operations were called
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 810)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
         mock_camera_instance.configure.assert_called_once_with(mock_config)
         mock_camera_instance.start.assert_called_once()
 
@@ -428,7 +428,7 @@ class TestPiCamera:
         mock_global_camera_info = patch('camera.implementations.pi_camera.Picamera2.global_camera_info')
         mock_global_camera_info.return_value = [{'id': 'test_camera'}]
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (1440, 810)}}
+        mock_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_preview_configuration.return_value = mock_config
 
         with mock_global_camera_info:
@@ -442,7 +442,7 @@ class TestPiCamera:
             assert camera.camera == mock_camera_instance
 
             # Verify camera operations were called
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 810)})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
             mock_camera_instance.configure.assert_called_once_with(mock_config)
             mock_camera_instance.start.assert_called_once()
 
@@ -454,7 +454,7 @@ class TestPiCamera:
     def test_stop(self, mock_picamera2_class):
         """Test stop."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (1440, 810)}}
+        mock_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_preview_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -474,7 +474,7 @@ class TestPiCamera:
     def test_stop_when_recording(self, mock_picamera2_class):
         """Test stop when camera is recording (covers conditional branch)."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (1440, 810)}}
+        mock_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_preview_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -565,7 +565,7 @@ class TestPiCamera:
         mock_encoder_instance = mock_h264_encoder_class.return_value
         mock_output_instance = mock_file_output_class.return_value
         mock_video_config = {'main': {'size': (1920, 1080), 'format': 'RGB888'}}
-        mock_preview_config = {'main': {'size': (1440, 810)}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_video_configuration.return_value = mock_video_config
         mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
 
@@ -581,7 +581,7 @@ class TestPiCamera:
 
         # Verify preview was restarted
         mock_camera_instance.stop.assert_called_once()
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 810)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
         mock_camera_instance.configure.assert_called_once_with(mock_preview_config)
         assert mock_camera_instance.start.call_count == 1  # Should be called once to restart preview
 
@@ -600,7 +600,7 @@ class TestPiCamera:
 
         # Mock configurations
         mock_still_config = {'main': {'size': (4056, 3040)}}
-        mock_preview_config = {'main': {'size': (1440, 810)}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_still_configuration.return_value = mock_still_config
         mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
 
@@ -631,7 +631,7 @@ class TestPiCamera:
             mock_cv2.imwrite.assert_called_once_with("test.jpg", mock_array)
 
             # Verify preview restart
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 810)})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
             mock_camera_instance.configure.assert_any_call(mock_preview_config)
 
             # Verify return value
@@ -682,7 +682,7 @@ class TestPiCamera:
 
         # Mock configurations
         mock_still_config = {'main': {'size': (4056, 3040)}}
-        mock_preview_config = {'main': {'size': (1440, 810)}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_still_configuration.return_value = mock_still_config
         mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
 
@@ -711,7 +711,7 @@ class TestPiCamera:
 
         # Mock configurations
         mock_still_config = {'main': {'size': (4056, 3040)}}
-        mock_preview_config = {'main': {'size': (1440, 810)}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_still_configuration.return_value = mock_still_config
         mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
 

@@ -125,7 +125,7 @@ class PiCamera(AbstractCamera):
     def create_preview_configuration(self, main=None):
         """Create preview configuration."""
         if not main:
-            main = {"size": (1440, 810)}  # 16:9 aspect ratio for preview
+            main = {"size": (1440, 1080)}  # 4:3 aspect ratio for preview
         return self.camera.create_preview_configuration(main=main)
     
     def create_still_configuration(self, main=None, raw=None):
