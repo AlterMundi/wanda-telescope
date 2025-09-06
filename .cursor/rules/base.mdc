@@ -19,6 +19,9 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 
 ## Mandatory Development Practices
 
+### Run virtual environment:
+- **source venv/bin/activate** 
+
 ### Test-Driven Development (TDD)
 - **ALWAYS write tests first** before implementing any feature
 - **Minimum 85% code coverage** for all new code

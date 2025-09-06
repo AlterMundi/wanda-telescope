@@ -2,7 +2,7 @@
     <h2>Camera Controls</h2>
     <form method="post">
         <p>
-            Exposure Time in Seconds (0.1s - 300s): 
+            Exposure Time in Seconds (0.1s - 230s): 
             <input type="range" name="exposure" min="0" max="1000" step="1" value="{{ slider_value }}"
                 oninput="CameraControls.updateExposure(this.value)">
             <output id="exposure_display">{{ current_exposure }}</output>
@@ -22,10 +22,10 @@
             </button>
         </div>
         <p>
-            ISO Sensitivity: 
+            ISO Sensitivity (100-1600): 
             <input type="range" name="iso" min="0" max="1000" step="1" value="{{ iso_slider_value }}"
                 oninput="CameraControls.updateISO(this.value)" 
-                title="Higher sensitivity brightens images but adds noise (common in astrophotography)">
+                title="Higher sensitivity brightens images but adds noise (100-1600 range matches IMX477 sensor capabilities)">
             <output id="iso_display">{{ current_iso_label }}</output>
         </p>
         <div class="toggle-container">

@@ -8,7 +8,7 @@ const CameraControls = {
      */
     updateExposure: function(sliderValue) {
         const minSeconds = 0.1;
-        const maxSeconds = 300;
+        const maxSeconds = 230;  // IMX477 sensor maximum
         const seconds = minSeconds * Math.pow(maxSeconds / minSeconds, sliderValue / 1000);
         
         // Format the display: show as decimal for < 1s, otherwise as whole seconds
@@ -30,7 +30,7 @@ const CameraControls = {
      */
     setPreset: function(seconds) {
         const minSeconds = 0.1;
-        const maxSeconds = 300;
+        const maxSeconds = 230;  // IMX477 sensor maximum
         const logRange = Math.log(maxSeconds / minSeconds);
         const sliderValue = Math.round(1000 * Math.log(seconds / minSeconds) / logRange);
         
@@ -114,12 +114,12 @@ const CameraControls = {
      * @param {number} sliderValue - Value from the ISO slider (0-1000)
      */
     updateISO: function(sliderValue) {
-        const minISO = 20;
-        const maxISO = 1600;
+        const minISO = 100;  // Maps to gain 1.0 (IMX477 minimum)
+        const maxISO = 1600;  // Maps to gain 16.0 (IMX477 maximum)
         const isoValue = Math.round(minISO + (maxISO - minISO) * sliderValue / 1000);
         
         // Check if we're near milestone values for snapping
-        const milestones = [20, 800, 1600];
+        const milestones = [100, 800, 1600];
         const snapThreshold = 50; // Range around milestone values for snapping
         
         let displayValue = isoValue;
@@ -136,7 +136,7 @@ const CameraControls = {
         // Format display based on whether we're snapped to a milestone
         let display;
         if (isSnapped) {
-            const labels = {20: 'Low (20)', 800: 'Medium (800)', 1600: 'High (1600)'};
+            const labels = {100: 'Low (100)', 800: 'Medium (800)', 1600: 'High (1600)'};
             display = labels[displayValue];
         } else {
             display = `${displayValue}`;

@@ -43,9 +43,14 @@ class TestWandaApp:
         camera.stop_video = Mock(return_value=True)
         camera.update_camera_settings = Mock()
         camera.get_exposure_seconds = Mock(return_value=0.1)
-        camera.iso_to_gain = Mock(return_value=1.0)
+        camera.iso_to_gain = Mock(side_effect=lambda iso: iso / 100.0)
         camera.gain_to_iso = Mock(return_value=800)
         camera.cleanup = Mock()
+
+        # Mock set_exposure_us method to update exposure_us attribute
+        def mock_set_exposure_us(us, gain=None):
+            camera.exposure_us = us
+        camera.set_exposure_us = Mock(side_effect=mock_set_exposure_us)
 
         return camera
 
@@ -538,10 +543,12 @@ class TestWandaApp:
 
             # Check camera settings were updated
             # exposure_seconds = min_seconds * math.exp(500 * log_range / 1000)
-            # This should be approximately 5.477 seconds
-            expected_exposure_us = 5477225  # 5.477225575051659 * 1000000
+            # With max_seconds = 230, this should be approximately 4.796 seconds
+            expected_exposure_us = 4795831  # 4.795831523312719 * 1000000
+            expected_gain = 7.0  # 700.0 / 100 (ISO 700 converted to gain)
+            app_instance.camera.set_exposure_us.assert_called_once_with(expected_exposure_us, expected_gain)
             assert app_instance.camera.exposure_us == expected_exposure_us
-            app_instance.camera.iso_to_gain.assert_called_with(652.0)  # Converted ISO value: 20 + (1600-20) * 400/1000 = 652
+            app_instance.camera.iso_to_gain.assert_called_with(700.0)  # Converted ISO value: 100 + (1600-100) * 400/1000 = 700
             assert app_instance.camera.night_vision_mode is True
             assert app_instance.camera.night_vision_intensity == 2.5
             assert app_instance.camera.save_raw is True
@@ -611,7 +618,7 @@ class TestWandaApp:
 
         # Test long exposure
         assert app_instance._format_exposure_display(10) == "10s"
-        assert app_instance._format_exposure_display(300) == "300s"
+        assert app_instance._format_exposure_display(230) == "230s"
 
     def test_slider_to_seconds_conversion(self, app_instance):
         """Test slider value to seconds conversion."""
@@ -620,22 +627,22 @@ class TestWandaApp:
 
         # Test middle value
         result = app_instance._slider_to_seconds(500)
-        assert 0.1 < result < 300
+        assert 0.1 < result < 230
 
         # Test maximum value
-        assert app_instance._slider_to_seconds(1000) == pytest.approx(300, abs=0.01)
+        assert app_instance._slider_to_seconds(1000) == pytest.approx(230, abs=0.01)
 
     def test_iso_to_slider_and_label(self, app_instance):
         """Test ISO value to slider conversion."""
         # Test normal ISO value
         slider_val, label = app_instance._iso_to_slider_and_label(800)
-        assert slider_val == 493  # (800 - 20) / (1600 - 20) * 1000 = 493.67, rounded to 493
+        assert slider_val == 466  # (800 - 100) / (1600 - 100) * 1000 = 700 / 1500 * 1000 = 466.67, rounded to 466
         assert label == "Medium (800)"
 
         # Test low ISO value
-        slider_val, label = app_instance._iso_to_slider_and_label(20)
+        slider_val, label = app_instance._iso_to_slider_and_label(100)
         assert slider_val == 0
-        assert label == "Low (20)"
+        assert label == "Low (100)"
 
         # Test high ISO value
         slider_val, label = app_instance._iso_to_slider_and_label(1600)
@@ -644,8 +651,8 @@ class TestWandaApp:
 
         # Test non-milestone value
         slider_val, label = app_instance._iso_to_slider_and_label(400)
-        # (400 - 20) / (1600 - 20) * 1000 = 380 / 1580 * 1000 = 240.506
-        assert slider_val == 240  # int(240.506) = 240
+        # (400 - 100) / (1600 - 100) * 1000 = 300 / 1500 * 1000 = 200
+        assert slider_val == 200  # int(200) = 200
         assert label == "400"
 
     def test_run_method_with_config(self, mock_camera, mock_config):

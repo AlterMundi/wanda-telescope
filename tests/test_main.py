@@ -304,24 +304,25 @@ class TestMainFunction:
         mock_camera.cleanup.assert_called_once()
         mock_exit.assert_called_once_with(1)
     
-    @patch('main.WandaApp')
-    @patch('main.initialize_camera')
-    @patch('main.signal.signal')
     @patch('sys.exit')
-    def test_main_no_camera(self, mock_exit, mock_signal, mock_init_camera, mock_wanda_app):
+    @patch('main.signal.signal')
+    @patch('main.initialize_camera')
+    @patch('main.WandaApp')
+    def test_main_no_camera(self, mock_wanda_app, mock_init_camera, mock_signal, mock_exit):
         """Test main function when camera initialization fails."""
         # Arrange
         mock_init_camera.return_value = None
-        mock_app_instance = Mock()
-        mock_wanda_app.return_value = mock_app_instance
-        
-        # Act
-        main()
-        
-        # Assert
-        mock_wanda_app.assert_called_once_with(camera=None)
-        mock_app_instance.run.assert_called_once()
-        mock_exit.assert_not_called()
+
+        # Mock sys.exit to prevent actual exit
+        mock_exit.side_effect = SystemExit()
+
+        # Act & Assert
+        with pytest.raises(SystemExit):
+            main()
+
+        # Verify the correct calls were made
+        mock_wanda_app.assert_not_called()
+        mock_exit.assert_called_once_with(1)
     
     @patch('main.WandaApp')
     @patch('main.initialize_camera')

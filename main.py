@@ -108,8 +108,13 @@ def main():
     # Initialize camera
     global camera
     camera = initialize_camera()
-    
+
     # Create and run the web application
+    if camera is None:
+        print("Cannot start web application without camera.")
+        print("Please fix the camera issue and restart the application.")
+        sys.exit(1)
+
     app = WandaApp(camera=camera)
     try:
         app.run()

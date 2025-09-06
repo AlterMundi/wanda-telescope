@@ -95,22 +95,32 @@ class WandaApp:
         slider_value = request.form.get('exposure', type=int)
         iso = request.form.get('iso', type=int)
         
-        if slider_value is not None and iso is not None:
+        # Handle camera settings - apply both exposure and ISO together
+        if slider_value is not None or iso is not None:
             # Convert slider value to exposure time in seconds, then to microseconds
-            exposure_seconds = self._slider_to_seconds(slider_value)
-            self.camera.exposure_us = int(exposure_seconds * 1000000)
-            
+            if slider_value is not None:
+                exposure_seconds = self._slider_to_seconds(slider_value)
+                exposure_us = int(exposure_seconds * 1000000)
+            else:
+                exposure_us = self.camera.get_exposure_us()
+
             # Convert ISO slider value (0-1000) to actual ISO value, with validation
-            min_iso = 20
-            max_iso = 1600
-            try:
-                iso_slider_value = int(iso)
-                # Convert slider value to ISO value
-                actual_iso = min_iso + (max_iso - min_iso) * iso_slider_value / 1000
-                actual_iso = max(min_iso, min(max_iso, actual_iso))  # Clamp to range
-            except (ValueError, TypeError):
-                actual_iso = 800  # Default to Medium
-            self.camera.gain = self.camera.iso_to_gain(actual_iso)
+            if iso is not None:
+                min_iso = 100  # Maps to gain 1.0 (IMX477 minimum)
+                max_iso = 1600  # Maps to gain 16.0 (IMX477 maximum)
+                try:
+                    iso_slider_value = int(iso)
+                    # Convert slider value to ISO value
+                    actual_iso = min_iso + (max_iso - min_iso) * iso_slider_value / 1000
+                    actual_iso = max(min_iso, min(max_iso, actual_iso))  # Clamp to range
+                except (ValueError, TypeError):
+                    actual_iso = 800  # Default to Medium
+                gain = self.camera.iso_to_gain(actual_iso)
+            else:
+                gain = self.camera.gain
+
+            # Apply both exposure and gain to camera
+            self.camera.set_exposure_us(exposure_us, gain)
         
         # Night vision mode settings
         self.camera.night_vision_mode = 'night_vision_mode' in request.form
@@ -150,7 +160,7 @@ class WandaApp:
         
         # Calculate slider value from exposure time in seconds
         min_seconds = 0.1
-        max_seconds = 300
+        max_seconds = 230  # IMX477 sensor maximum
         slider_max = 1000
         log_range = math.log(max_seconds / min_seconds)
         slider_value = int(1000 * math.log(exposure_seconds / min_seconds) / log_range)
@@ -196,22 +206,22 @@ class WandaApp:
         """Convert slider value (0-1000) to exposure time in seconds."""
         import math
         min_seconds = 0.1
-        max_seconds = 300
+        max_seconds = 230  # IMX477 sensor maximum
         log_range = math.log(max_seconds / min_seconds)
         return min_seconds * math.exp(slider_value * log_range / 1000)
     
     def _iso_to_slider_and_label(self, iso_value):
         """Convert ISO value to slider position and display label."""
-        min_iso = 20
-        max_iso = 1600
+        min_iso = 100  # Maps to gain 1.0 (IMX477 minimum)
+        max_iso = 1600  # Maps to gain 16.0 (IMX477 maximum)
         
         # Convert ISO value to slider position (0-1000)
         slider_value = int(1000 * (iso_value - min_iso) / (max_iso - min_iso))
         slider_value = max(0, min(1000, slider_value))  # Clamp to range
         
         # Check if we're near milestone values for display
-        milestones = [20, 800, 1600]
-        milestone_labels = {20: 'Low (20)', 800: 'Medium (800)', 1600: 'High (1600)'}
+        milestones = [100, 800, 1600]
+        milestone_labels = {100: 'Low (100)', 800: 'Medium (800)', 1600: 'High (1600)'}
         
         # Find if we're close to a milestone
         for milestone in milestones:

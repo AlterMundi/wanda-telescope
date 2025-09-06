@@ -78,11 +78,11 @@ class PiCamera(AbstractCamera):
                     self.exposure_mode = self._original_hardware_state['exposure_mode']
     
     def initialize(self):
-        """Initialize the Pi camera hardware."""
+        """Initialize the Pi camera hardware with optimized configuration."""
         logger.info("Pi camera: initialize()")
         max_retries = 3
         retry_delay = 2  # seconds
-        
+
         for attempt in range(max_retries):
             try:
                 # Check if any cameras are available
@@ -95,17 +95,27 @@ class PiCamera(AbstractCamera):
                     error_msg += "4. Power supply is adequate (use official Pi power supply)\n"
                     error_msg += "5. Run 'sudo reboot' if camera was recently connected"
                     raise Exception(error_msg)
-                
+
                 logger.info(f"Detected {len(camera_info)} camera(s)")
                 self.camera = Picamera2()
-                
+
+                # Create still config with buffers for efficiency
+                config = self.camera.create_still_configuration(buffer_count=2)
+                self.camera.configure(config)
+
+                # Disable auto modes and set frame limits initially
+                self.camera.set_controls({
+                    "AeEnable": False,
+                    "FrameDurationLimits": (100, 230_000_000)  # Up to 230s for IMX477
+                })
+
                 # Create capture directory if it doesn't exist
                 os.makedirs(self.capture_dir, exist_ok=True)
-                
+
                 self.status = "Pi camera ready"
                 logger.info("Pi camera hardware initialized successfully")
                 return  # Success!
-                
+
             except IndexError as e:
                 if attempt < max_retries - 1:
                     logger.warning(f"Camera initialization attempt {attempt + 1} failed with IndexError, retrying in {retry_delay}s...")
@@ -116,7 +126,7 @@ class PiCamera(AbstractCamera):
                     error_msg += "The camera hardware is not responding. Please check the physical connection."
                     logger.error(error_msg)
                     raise Exception(error_msg)
-                    
+
             except Exception as e:
                 self.status = f"Pi camera error: {str(e)}"
                 logger.error(f"Failed to initialize Pi camera hardware: {e}")
@@ -374,6 +384,30 @@ class PiCamera(AbstractCamera):
         """Convert ISO value to gain."""
         return iso / 100.0
     
+    def _validate_and_clamp_gain(self, gain):
+        """Validate and clamp gain value against sensor limits.
+        
+        Args:
+            gain: The gain value to validate
+            
+        Returns:
+            float: The clamped gain value within sensor limits
+        """
+        try:
+            gain_limits = self.camera.camera_controls['AnalogueGain']
+            if isinstance(gain_limits, tuple) and len(gain_limits) >= 2:
+                gain_min, gain_max = gain_limits[0], gain_limits[1]
+            elif hasattr(gain_limits, 'min') and hasattr(gain_limits, 'max'):
+                gain_min, gain_max = gain_limits.min, gain_limits.max
+            else:
+                # Fallback to reasonable defaults
+                gain_min, gain_max = 1.0, 16.0
+            
+            return max(gain_min, min(gain, gain_max))
+        except (KeyError, AttributeError):
+            # If we can't get gain limits, return the provided gain
+            return gain
+    
     def get_exposure_seconds(self):
         """Get the current exposure time in seconds."""
         return self.exposure_us / 1000000.0
@@ -382,43 +416,78 @@ class PiCamera(AbstractCamera):
         """Get the current exposure time in microseconds."""
         return self.exposure_us
     
-    def set_exposure_us(self, us):
-        """Set the exposure time in microseconds."""
+    def set_exposure_us(self, us, gain=None):
+        """Set exposure time in µs and analogue gain for low-light."""
         if not self.camera:
             raise Exception("Camera not initialized")
-        
-        # Validate and clamp exposure time
-        us = max(100, min(us, 300_000_000))  # Clamp between 100μs and 300s
+
+        # Query sensor limits - handle both tuple and object formats
+        exp_limits = self.camera.camera_controls['ExposureTime']
+        if isinstance(exp_limits, tuple) and len(exp_limits) == 2:
+            exp_min, exp_max = exp_limits
+        elif hasattr(exp_limits, 'min') and hasattr(exp_limits, 'max'):
+            exp_min, exp_max = exp_limits.min, exp_limits.max
+        else:
+            # Fallback to reasonable defaults
+            exp_min, exp_max = 31, 230_000_000
+
+        us = max(exp_min, min(us, exp_max))
+
         self.exposure_us = us
-        
-        # Apply the setting to the camera
+
+        # Use provided gain or current gain
+        if gain is None:
+            gain = self.gain
+        else:
+            self.gain = gain
+
+        # Validate and clamp gain against sensor limits
+        gain = self._validate_and_clamp_gain(gain)
+        self.gain = gain  # Update stored value
+
         try:
-            self.camera.set_controls({"ExposureTime": us})
+            self.camera.set_controls({
+                "ExposureTime": us,
+                "AnalogueGain": gain
+            })
+            logger.info(f"Set exposure to {us/1e6:.1f}s and gain to {gain}")
         except Exception as e:
-            logger.warning(f"Could not set exposure time: {e}")
+            logger.warning(f"Could not set exposure/gain: {e}")
     
     def update_camera_settings(self):
-        """Update camera settings based on current values."""
+        """Update camera settings based on current values with sensor limits."""
         if not self.camera:
             raise Exception("Camera not initialized")
-        
+
         try:
             controls = {}
-            
-            # Validate and clamp exposure time
-            exposure_us = max(100, min(self.exposure_us, 300_000_000))  # Clamp between 100μs and 300s
-            self.exposure_us = exposure_us  # Update the stored value
-            controls["ExposureTime"] = exposure_us
-            
-            # Validate and clamp gain
-            gain = max(0.2, min(self.gain, 16.0))  # Clamp between 0.2 and 16.0
+
+            # Validate and clamp exposure time using sensor limits
+            try:
+                exp_limits = self.camera.camera_controls['ExposureTime']
+                if isinstance(exp_limits, tuple) and len(exp_limits) == 2:
+                    exp_min, exp_max = exp_limits
+                elif hasattr(exp_limits, 'min') and hasattr(exp_limits, 'max'):
+                    exp_min, exp_max = exp_limits.min, exp_limits.max
+                else:
+                    exp_min, exp_max = 31, 230_000_000
+
+                exposure_us = max(exp_min, min(self.exposure_us, exp_max))
+                self.exposure_us = exposure_us  # Update the stored value
+                controls["ExposureTime"] = exposure_us
+            except (KeyError, AttributeError):
+                # Fallback to basic exposure setting
+                controls["ExposureTime"] = self.exposure_us
+
+            # Validate and clamp gain using sensor limits
+            gain = self._validate_and_clamp_gain(self.gain)
             self.gain = gain  # Update the stored value
             controls["AnalogueGain"] = gain
-            
+
             # Validate and clamp night vision intensity
             night_vision_intensity = max(1.0, min(self.night_vision_intensity, 80.0))  # Clamp between 1.0 and 80.0
             self.night_vision_intensity = night_vision_intensity  # Update the stored value
-            
+
             # Handle night vision mode
             if self.night_vision_mode:
                 self.use_digital_gain = True
@@ -426,7 +495,7 @@ class PiCamera(AbstractCamera):
             else:
                 self.use_digital_gain = False
                 self.digital_gain = 1.0
-            
+
             # Apply controls
             self.camera.set_controls(controls)
             logger.debug(f"Applied camera controls: {controls}")
@@ -491,3 +560,34 @@ class PiCamera(AbstractCamera):
         except Exception as e:
             logger.error(f"Error stopping video: {e}")
             return False
+
+    def capture_with_verification(self, filename):
+        """Capture and verify exposure settings are applied correctly."""
+        try:
+            # Capture with flush to ensure fresh data
+            request = self.camera.capture_request(flush=True)
+            image = request.make_array("main")
+            metadata = request.get_metadata()
+
+            # Verify exposure settings
+            actual_us = metadata['ExposureTime']
+            if abs(actual_us - self.exposure_us) > 1000:  # 1ms tolerance
+                logger.warning(f"Exposure mismatch: requested {self.exposure_us}µs, actual {actual_us}µs")
+
+            # Convert array to image and save
+            # Convert from RGB to BGR for OpenCV
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            # Save the image
+            cv2.imwrite(filename, image)
+
+            # Clean up
+            request.release()
+
+            logger.info(f"Successfully captured with verification to {filename}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to capture with verification: {e}")
+            raise

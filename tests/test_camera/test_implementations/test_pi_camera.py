@@ -428,8 +428,10 @@ class TestPiCamera:
         mock_global_camera_info = patch('camera.implementations.pi_camera.Picamera2.global_camera_info')
         mock_global_camera_info.return_value = [{'id': 'test_camera'}]
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (1440, 1080)}}
-        mock_camera_instance.create_preview_configuration.return_value = mock_config
+        mock_still_config = {'main': {'size': (4056, 3040)}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
+        mock_camera_instance.create_still_configuration.return_value = mock_still_config
+        mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
 
         with mock_global_camera_info:
             camera = PiCamera()
@@ -441,9 +443,10 @@ class TestPiCamera:
             mock_picamera2_class.assert_called_once()
             assert camera.camera == mock_camera_instance
 
-            # Verify camera operations were called
+            # Verify camera operations were called (configure is called twice: once for still, once for preview)
+            mock_camera_instance.create_still_configuration.assert_called_once_with(buffer_count=2)
             mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
-            mock_camera_instance.configure.assert_called_once_with(mock_config)
+            assert mock_camera_instance.configure.call_count == 2
             mock_camera_instance.start.assert_called_once()
 
             # Verify state changes
@@ -818,10 +821,18 @@ class TestPiCamera:
         camera = PiCamera()
         camera.camera = patch('camera.implementations.pi_camera.Picamera2').start()
 
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        })
+
         # Test valid exposure
         camera.set_exposure_us(500000)
         assert camera.exposure_us == 500000
-        camera.camera.set_controls.assert_called_with({"ExposureTime": 500000})
+        camera.camera.set_controls.assert_called_with({"ExposureTime": 500000, "AnalogueGain": 1.0})
 
         # Reset mock for next test
         camera.camera.reset_mock()
@@ -829,7 +840,7 @@ class TestPiCamera:
         # Test clamping minimum
         camera.set_exposure_us(50)  # Below minimum
         assert camera.exposure_us == 100  # Should be clamped
-        camera.camera.set_controls.assert_called_with({"ExposureTime": 100})
+        camera.camera.set_controls.assert_called_with({"ExposureTime": 100, "AnalogueGain": 1.0})
 
         # Reset mock for next test
         camera.camera.reset_mock()
@@ -854,6 +865,14 @@ class TestPiCamera:
         camera = PiCamera()
         camera.camera = mock_camera_instance
 
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        })
+
         # Mock set_controls to raise an exception
         mock_camera_instance.set_controls.side_effect = Exception("Set controls failed")
 
@@ -861,7 +880,7 @@ class TestPiCamera:
             camera.set_exposure_us(500000)
 
             # Verify warning was logged
-            mock_logger.warning.assert_called_with("Could not set exposure time: Set controls failed")
+            mock_logger.warning.assert_called_with("Could not set exposure/gain: Set controls failed")
 
             # Verify exposure_us was still set
             assert camera.exposure_us == 500000
@@ -870,6 +889,15 @@ class TestPiCamera:
         """Test updating camera settings."""
         camera = PiCamera()
         camera.camera = patch('camera.implementations.pi_camera.Picamera2').start()
+
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        mock_gain_limits = type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': mock_gain_limits
+        })
 
         # Set test values
         camera.exposure_us = 200000
@@ -900,6 +928,15 @@ class TestPiCamera:
         camera = PiCamera()
         camera.camera = mock_camera_instance
 
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        mock_gain_limits = type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': mock_gain_limits
+        })
+
         # Mock set_controls to raise an exception
         mock_camera_instance.set_controls.side_effect = Exception("Set controls failed")
 
@@ -913,6 +950,15 @@ class TestPiCamera:
         """Test night vision mode settings."""
         camera = PiCamera()
         camera.camera = patch('camera.implementations.pi_camera.Picamera2').start()
+
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        mock_gain_limits = type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': mock_gain_limits
+        })
 
         # Enable night vision
         camera.night_vision_mode = True
@@ -1145,3 +1191,204 @@ class TestPiCamera:
                 # Verify error handling
                 assert result == False
                 mock_logger.error.assert_called_with("Error stopping video: Stop recording failed")
+
+    @patch('camera.implementations.pi_camera.FileOutput')
+    @patch('camera.implementations.pi_camera.H264Encoder')
+    @patch('camera.implementations.pi_camera.Picamera2')
+    def test_start_recording_exception_handling(self, mock_picamera2_class, mock_h264_encoder_class, mock_file_output_class):
+        """Test start_recording exception handling (lines 223-226)."""
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_encoder_instance = mock_h264_encoder_class.return_value
+        mock_output_instance = mock_file_output_class.return_value
+        mock_video_config = {'main': {'size': (1920, 1080), 'format': 'RGB888'}}
+        mock_camera_instance.create_video_configuration.return_value = mock_video_config
+
+        camera = PiCamera()
+        camera.camera = mock_camera_instance
+
+        # Mock start_recording to raise an exception
+        mock_camera_instance.start_recording.side_effect = Exception("Recording start failed")
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            with pytest.raises(Exception, match="Recording start failed"):
+                camera.start_recording(mock_encoder_instance, "test.mp4")
+
+            # Verify error handling
+            assert camera.status == "Recording failed: Recording start failed"
+            mock_logger.error.assert_called_with("Failed to start recording: Recording start failed")
+
+    @patch('camera.implementations.pi_camera.FileOutput')
+    @patch('camera.implementations.pi_camera.H264Encoder')
+    @patch('camera.implementations.pi_camera.Picamera2')
+    def test_stop_recording_exception_handling(self, mock_picamera2_class, mock_h264_encoder_class, mock_file_output_class):
+        """Test stop_recording exception handling (lines 249-251)."""
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_encoder_instance = mock_h264_encoder_class.return_value
+        mock_output_instance = mock_file_output_class.return_value
+        mock_video_config = {'main': {'size': (1920, 1080), 'format': 'RGB888'}}
+        mock_preview_config = {'main': {'size': (1440, 1080)}}
+        mock_camera_instance.create_video_configuration.return_value = mock_video_config
+        mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
+
+        camera = PiCamera()
+        camera.camera = mock_camera_instance
+        camera.started = True
+        camera.is_recording = True
+
+        # Mock stop_recording to raise an exception
+        mock_camera_instance.stop_recording.side_effect = Exception("Recording stop failed")
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            camera.stop_recording()
+
+            # Verify error handling
+            assert camera.status == "Stop recording failed: Recording stop failed"
+            mock_logger.error.assert_called_with("Failed to stop recording: Recording stop failed")
+
+    def test_capture_file_no_camera(self):
+        """Test capture_file when camera is not initialized (line 273)."""
+        camera = PiCamera()
+        camera.camera = None
+
+        with pytest.raises(Exception, match="Camera not initialized"):
+            camera.capture_file("test.jpg")
+
+    def test_capture_image_error_case(self):
+        """Test capture_image error case (lines 348-349)."""
+        import numpy as np
+
+        mock_camera = patch('camera.implementations.pi_camera.Picamera2').start()
+        mock_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        mock_camera.capture_array.return_value = mock_array
+
+        camera = PiCamera()
+        camera.camera = mock_camera
+
+        # Mock temporary file operations to simulate failure
+        with patch('tempfile.NamedTemporaryFile') as mock_temp_file, \
+             patch('os.path.exists', return_value=False), \
+             patch('builtins.open', create=True) as mock_open:
+
+            mock_temp_file.return_value.__enter__.return_value.name = '/tmp/test.jpg'
+
+            with patch('camera.implementations.pi_camera.logger') as mock_logger:
+                result = camera.capture_image()
+
+                # Verify error case
+                assert result == (False, None)
+                mock_logger.error.assert_called_with("Failed to capture image")
+
+    def test_set_exposure_us_with_gain_parameter(self):
+        """Test set_exposure_us with gain parameter (line 410)."""
+        camera = PiCamera()
+        camera.camera = patch('camera.implementations.pi_camera.Picamera2').start()
+
+        # Mock camera controls with sensor limits
+        from unittest.mock import PropertyMock
+        mock_exp_limits = type('MockLimits', (), {'min': 100, 'max': 300000000})()
+        type(camera.camera).camera_controls = PropertyMock(return_value={
+            'ExposureTime': mock_exp_limits,
+            'AnalogueGain': type('MockLimits', (), {'min': 0.2, 'max': 16.0})()
+        })
+
+        # Test with gain parameter (should trigger line 410)
+        camera.set_exposure_us(200000, gain=2.5)
+
+        # Verify gain was set from parameter
+        assert camera.gain == 2.5
+        camera.camera.set_controls.assert_called_with({"ExposureTime": 200000, "AnalogueGain": 2.5})
+
+    def test_get_frame_exception_handling(self):
+        """Test get_frame exception handling (lines 476-478)."""
+        import numpy as np
+
+        mock_camera = patch('camera.implementations.pi_camera.Picamera2').start()
+        mock_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        mock_camera.capture_array.side_effect = Exception("Capture failed")
+
+        camera = PiCamera()
+        camera.camera = mock_camera
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            result = camera.get_frame()
+
+            # Verify exception handling
+            assert result is None
+            mock_logger.error.assert_called_with("Error getting frame: Capture failed")
+
+    @patch('camera.implementations.pi_camera.cv2')
+    @patch('camera.implementations.pi_camera.Picamera2')
+    def test_capture_with_verification_success(self, mock_picamera2_class, mock_cv2):
+        """Test capture_with_verification method."""
+        import numpy as np
+        from unittest.mock import Mock
+
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        mock_request = Mock()
+        mock_request.make_array.return_value = mock_array
+        mock_request.get_metadata.return_value = {'ExposureTime': 200000}
+        mock_camera_instance.capture_request.return_value = mock_request
+
+        camera = PiCamera()
+        camera.camera = mock_camera_instance
+        camera.exposure_us = 200000
+
+        # Mock OpenCV operations
+        mock_cv2.cvtColor.return_value = mock_array
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            result = camera.capture_with_verification("test.jpg")
+
+            # Verify success
+            assert result == True
+            mock_camera_instance.capture_request.assert_called_with(flush=True)
+            mock_request.make_array.assert_called_once()
+            mock_request.get_metadata.assert_called_once()
+            mock_cv2.cvtColor.assert_called_once()
+            mock_cv2.imwrite.assert_called_once()
+            mock_request.release.assert_called_once()
+            mock_logger.info.assert_called_with("Successfully captured with verification to test.jpg")
+
+    @patch('camera.implementations.pi_camera.cv2')
+    @patch('camera.implementations.pi_camera.Picamera2')
+    def test_capture_with_verification_exposure_mismatch(self, mock_picamera2_class, mock_cv2):
+        """Test capture_with_verification with exposure mismatch."""
+        import numpy as np
+        from unittest.mock import Mock
+
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        mock_request = Mock()
+        mock_request.make_array.return_value = mock_array
+        mock_request.get_metadata.return_value = {'ExposureTime': 210000}  # 10ms difference
+        mock_camera_instance.capture_request.return_value = mock_request
+
+        camera = PiCamera()
+        camera.camera = mock_camera_instance
+        camera.exposure_us = 200000
+
+        # Mock OpenCV operations
+        mock_cv2.cvtColor.return_value = mock_array
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            result = camera.capture_with_verification("test.jpg")
+
+            # Verify success with warning
+            assert result == True
+            mock_logger.warning.assert_called_with("Exposure mismatch: requested 200000µs, actual 210000µs")
+
+    @patch('camera.implementations.pi_camera.Picamera2')
+    def test_capture_with_verification_exception_handling(self, mock_picamera2_class):
+        """Test capture_with_verification exception handling."""
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_camera_instance.capture_request.side_effect = Exception("Capture failed")
+
+        camera = PiCamera()
+        camera.camera = mock_camera_instance
+
+        with patch('camera.implementations.pi_camera.logger') as mock_logger:
+            with pytest.raises(Exception, match="Capture failed"):
+                camera.capture_with_verification("test.jpg")
+
+            mock_logger.error.assert_called_with("Failed to capture with verification: Capture failed")
