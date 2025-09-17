@@ -2,6 +2,7 @@
 Abstract base class defining the camera interface.
 """
 from abc import ABC, abstractmethod
+import config
 
 class AbstractCamera(ABC):
     """Abstract camera interface that all implementations must follow."""
@@ -9,14 +10,14 @@ class AbstractCamera(ABC):
     def __init__(self):
         self.started = False
         self.options = {}
-        # Common attributes that app.py expects
-        self.exposure_us = 100000  # Default exposure time in microseconds
-        self.gain = 1.0  # Default gain value
-        self.use_digital_gain = False  # Whether to use digital gain (legacy)
-        self.digital_gain = 1.0  # Digital gain value (legacy)
+        # Common attributes that app.py expects - use centralized config values
+        self.exposure_us = config.DEFAULT_EXPOSURE_US  # Default exposure time in microseconds
+        self.gain = config.DEFAULT_GAIN  # Default gain value
+        self.use_digital_gain = config.USE_DIGITAL_GAIN  # Whether to use digital gain (legacy)
+        self.digital_gain = config.DEFAULT_DIGITAL_GAIN  # Digital gain value (legacy)
         self.night_vision_mode = False  # Whether to use night vision mode
         self.night_vision_intensity = 1.0  # Night vision intensity value
-        self.save_raw = False  # Whether to save raw images
+        self.save_raw = config.SAVE_RAW  # Whether to save raw images
         self.recording = False  # Whether currently recording
         self.capture_status = "Ready"  # Current capture status
         self.capture_dir = "captures"  # Directory for saved images

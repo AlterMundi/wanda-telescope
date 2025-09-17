@@ -109,6 +109,9 @@ class PiCamera(AbstractCamera):
                     "FrameDurationLimits": (100, 230_000_000)  # Up to 230s for IMX477
                 })
 
+                # Apply default camera settings to hardware immediately
+                self.update_camera_settings()
+
                 # Create capture directory if it doesn't exist
                 os.makedirs(self.capture_dir, exist_ok=True)
 
@@ -160,6 +163,12 @@ class PiCamera(AbstractCamera):
             raise Exception("Camera not initialized")
         
         self.camera.configure(config)
+        
+        # Re-apply camera settings after configuration to ensure they are not reset
+        try:
+            self.update_camera_settings()
+        except Exception as e:
+            logger.warning(f"Could not re-apply camera settings after configuration: {e}")
     
     def set_controls(self, controls):
         """Set camera controls."""

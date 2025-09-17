@@ -217,13 +217,21 @@ class TestPiCamera:
         """Test initialization retries on IndexError."""
         # First call raises IndexError, second call succeeds
         mock_global_camera_info.side_effect = [IndexError("test"), [{'id': 'test_camera'}]]
+        
+        # Mock the camera instance and its controls to avoid update_camera_settings warnings
+        mock_camera_instance = mock_picamera2_class.return_value
+        mock_camera_instance.camera_controls = {
+            'ExposureTime': (31, 230_000_000),
+            'AnalogueGain': (1.0, 16.0)
+        }
 
         camera = PiCamera()
         camera.initialize()
 
         # Should have retried once
         assert mock_sleep.call_count == 1
-        mock_logger.warning.assert_called_once()
+        # Check that the retry warning was called (may have additional warnings from update_camera_settings)
+        mock_logger.warning.assert_any_call("Camera initialization attempt 1 failed with IndexError, retrying in 2s...")
         mock_logger.info.assert_any_call("Pi camera hardware initialized successfully")
 
     @patch('camera.implementations.pi_camera.time.sleep')
