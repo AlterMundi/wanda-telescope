@@ -6,6 +6,7 @@ import math
 import time
 import os
 import cv2
+import libcamera
 import numpy as np
 from picamera2 import Picamera2
 from picamera2.encoders import H264Encoder
@@ -26,6 +27,15 @@ class PiCamera(AbstractCamera):
         self.video_output = None
         self.status = "Pi camera initialized"
         
+        # Load scientific tuning here for IMX477 on Pi 5
+        self.tuning_file = "/usr/share/libcamera/ipa/rpi/pisp/imx477_scientific.json"
+        try:
+            self.tuning = Picamera2.load_tuning_file(self.tuning_file)
+            logger.info(f"Loaded scientific tuning from {self.tuning_file}")
+        except Exception as e:
+            logger.warning(f"Failed to load tuning file: {e}. Falling back to default.")
+            self.tuning = None
+
         # Camera settings attributes (needed by web app)
         self.exposure_us = 100000  # Default exposure time in microseconds
         self.gain = 1.0  # Default gain value
@@ -97,7 +107,14 @@ class PiCamera(AbstractCamera):
                     raise Exception(error_msg)
 
                 logger.info(f"Detected {len(camera_info)} camera(s)")
-                self.camera = Picamera2()
+                
+                # Apply scientific tuning file if available
+                if self.tuning is not None:
+                    self.camera = Picamera2(tuning=self.tuning)
+                    logger.info("Applied scientific tuning to camera")
+                else:
+                    self.camera = Picamera2()
+                    logger.info("Using default camera tuning")
 
                 # Create still config with buffers for efficiency
                 config = self.camera.create_still_configuration(buffer_count=2)
@@ -134,12 +151,28 @@ class PiCamera(AbstractCamera):
                 self.status = f"Pi camera error: {str(e)}"
                 logger.error(f"Failed to initialize Pi camera hardware: {e}")
                 raise
-    
+
     def create_preview_configuration(self, main=None):
         """Create preview configuration."""
         if not main:
-            main = {"size": (1440, 1080)}  # 4:3 aspect ratio for preview
-        return self.camera.create_preview_configuration(main=main)
+            main = {"size": (1440, 1080), "format": "BGR888"}  # Explicit format for consistency
+        config = self.camera.create_preview_configuration(main=main)
+
+        # Inject white balance controls for better color in preview
+        try:
+            controls = config.get("controls", {})
+            controls.setdefault("AwbEnable", True)
+            # Use Auto white balance instead of Tungsten to fix blue tint
+            controls.setdefault("AwbMode", libcamera.controls.AwbModeEnum.Auto)
+            # Add color correction controls
+            controls.setdefault("ColourGains", (1.0, 1.0))  # Red, Blue gains
+            controls.setdefault("Saturation", 1.0)  # Normal saturation
+            config["controls"] = controls
+            logger.info("Applied color correction controls to preview config")
+        except Exception as e:
+            logger.warning(f"Could not set white balance controls on preview config: {e}")
+
+        return config
     
     def create_still_configuration(self, main=None, raw=None):
         """Create still image configuration."""
@@ -191,7 +224,10 @@ class PiCamera(AbstractCamera):
         self.camera.start()
         self.started = True
         self.status = "Pi camera started"
-    
+        
+        # Apply additional color correction after camera starts
+        self.apply_color_correction()
+
     def stop(self):
         """Stop the camera."""
         logger.info("Pi camera: stop()")
@@ -600,3 +636,25 @@ class PiCamera(AbstractCamera):
         except Exception as e:
             logger.error(f"Failed to capture with verification: {e}")
             raise
+
+    def apply_color_correction(self):
+        """Apply color correction settings to fix blue tint and improve color accuracy."""
+        if not self.camera or not self.started:
+            return
+            
+        try:
+            # Apply color correction controls
+            controls = {
+                "AwbEnable": True,
+                "AwbMode": libcamera.controls.AwbModeEnum.Auto,
+                "ColourGains": (1.0, 1.0),  # Red, Blue gains - adjust if needed
+                "Saturation": 1.0,  # Normal saturation
+                "Brightness": 0.0,  # No brightness adjustment
+                "Contrast": 1.0,    # Normal contrast
+            }
+            
+            self.camera.set_controls(controls)
+            logger.info("Applied color correction controls to fix blue tint")
+            
+        except Exception as e:
+            logger.warning(f"Could not apply color correction: {e}")
