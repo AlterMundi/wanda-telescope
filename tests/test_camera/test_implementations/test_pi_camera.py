@@ -35,8 +35,8 @@ class TestPiCamera:
         # Act
         PiCamera()
 
-        # Assert
-        mock_logger.info.assert_called_once_with("Pi camera instance created")
+        # Assert - Check that the creation log was called (may have additional tuning file logs)
+        mock_logger.info.assert_any_call("Pi camera instance created")
 
     @patch('camera.implementations.pi_camera.AbstractCamera.__init__')
     def test_init_calls_super_init(self, mock_super_init):
@@ -268,7 +268,7 @@ class TestPiCamera:
 
         result = camera.create_preview_configuration()
 
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
         assert result == mock_config
 
     @patch('camera.implementations.pi_camera.Picamera2')
@@ -419,7 +419,7 @@ class TestPiCamera:
         camera.start()
 
         # Verify camera operations were called
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
         mock_camera_instance.configure.assert_called_once_with(mock_config)
         mock_camera_instance.start.assert_called_once()
 
@@ -453,7 +453,7 @@ class TestPiCamera:
 
             # Verify camera operations were called (configure is called twice: once for still, once for preview)
             mock_camera_instance.create_still_configuration.assert_called_once_with(buffer_count=2)
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
             assert mock_camera_instance.configure.call_count == 2
             mock_camera_instance.start.assert_called_once()
 
@@ -592,7 +592,7 @@ class TestPiCamera:
 
         # Verify preview was restarted
         mock_camera_instance.stop.assert_called_once()
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
         mock_camera_instance.configure.assert_called_once_with(mock_preview_config)
         assert mock_camera_instance.start.call_count == 1  # Should be called once to restart preview
 
@@ -642,7 +642,7 @@ class TestPiCamera:
             mock_cv2.imwrite.assert_called_once_with("test.jpg", mock_array)
 
             # Verify preview restart
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080)})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
             mock_camera_instance.configure.assert_any_call(mock_preview_config)
 
             # Verify return value
