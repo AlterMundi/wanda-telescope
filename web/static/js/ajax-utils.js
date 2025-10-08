@@ -83,6 +83,9 @@ const AjaxUtils = {
         const forms = document.querySelectorAll('form');
         
         forms.forEach(form => {
+            if (form.dataset.ajax === "false") {
+                return;
+            }
             form.addEventListener('submit', function(event) {
                 event.preventDefault();
                 AjaxUtils.submitForm(this);

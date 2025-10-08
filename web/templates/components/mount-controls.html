@@ -1,32 +1,56 @@
-<div class="controls">
-    <h2>Mount Controls</h2>
-    <form method="post">
-        <p>
-            Tracking Speed (seconds between steps): 
-            <input type="range" name="mount_speed" min="0.1" max="10" step="0.1" value="{{ mount_speed }}"
-                oninput="this.nextElementSibling.value = this.value">
-            <output>{{ mount_speed }}</output>
-        </p>
-        <div class="radio-container">
-            <p>Direction:</p>
-            <div class="radio-option">
-                <input type="radio" id="clockwise" name="mount_direction" value="clockwise" 
-                       {{ 'checked' if mount_direction else '' }}>
-                <label for="clockwise">Clockwise</label>
+<div class="ui-controls">
+    <form method="post" class="ui-form" data-component="mount">
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">Tracking Speed</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-field">
+                    <label for="mount-speed" class="ui-field__label">Seconds Between Steps</label>
+                    <div class="ui-field__value">
+                        <input id="mount-speed" type="range" name="mount_speed" min="0.1" max="10" step="0.1"
+                               value="{{ mount_speed }}" data-role="mount-speed-slider">
+                        <output data-bind="mount-speed-display">{{ mount_speed }}</output>
+                    </div>
+                    <p class="ui-field__hint">Lower values increase tracking responsiveness.</p>
+                </div>
             </div>
-            <div class="radio-option">
-                <input type="radio" id="counterclockwise" name="mount_direction" value="counterclockwise" 
-                       {{ 'checked' if not mount_direction else '' }}>
-                <label for="counterclockwise">Counterclockwise</label>
+        </section>
+
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">Direction</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-radio-group">
+                    <label class="ui-radio">
+                        <input type="radio" name="mount_direction" value="clockwise" {{ 'checked' if mount_direction else '' }}>
+                        <span>Clockwise</span>
+                    </label>
+                    <label class="ui-radio">
+                        <input type="radio" name="mount_direction" value="counterclockwise" {{ 'checked' if not mount_direction else '' }}>
+                        <span>Counterclockwise</span>
+                    </label>
+                </div>
             </div>
+        </section>
+
+        <div class="ui-form__actions">
+            <button type="submit" class="ui-button ui-button--primary">Apply Mount Settings</button>
         </div>
-        <input type="submit" value="Apply Mount Settings">
     </form>
-    <form action="{{ url_for('start_tracking') }}" method="post">
-        <input type="submit" value="Start Tracking" {{ 'disabled' if mount_tracking else '' }}>
-    </form>
-    <form action="{{ url_for('stop_tracking') }}" method="post">
-        <input type="submit" value="Stop Tracking" {{ 'disabled' if not mount_tracking else '' }}>
-    </form>
-    <div class="status">{{ mount_status }}</div>
+
+    <div class="ui-divider"></div>
+
+    <div class="ui-stack" data-component="mount-actions">
+        <form action="{{ url_for('start_tracking') }}" method="post">
+            <button type="submit" class="ui-button" {{ 'disabled' if mount_tracking else '' }}>Start Tracking</button>
+        </form>
+        <form action="{{ url_for('stop_tracking') }}" method="post">
+            <button type="submit" class="ui-button" {{ 'disabled' if not mount_tracking else '' }}>Stop Tracking</button>
+        </form>
+        <div class="ui-status">{{ mount_status }}</div>
+    </div>
 </div>

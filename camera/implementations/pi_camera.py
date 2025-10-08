@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 class PiCamera(AbstractCamera):
     """Raspberry Pi camera implementation using picamera2."""
+    CAPTURE_MAX_ATTEMPTS = 3
+    CAPTURE_RETRY_BACKOFF = 0.5  # seconds
     
     def __init__(self, capture_dir=None):
         """Initialize the Pi camera."""
@@ -316,47 +318,92 @@ class PiCamera(AbstractCamera):
         logger.info(f"Pi camera: capture_file({filename})")
         if not self.camera:
             raise Exception("Camera not initialized")
-        
-        try:
-            # Stop current session and reconfigure for still capture
-            was_started = self.started
-            if was_started:
-                self.camera.stop()
-            
-            still_config = self.create_still_configuration()
-            self.configure(still_config)
-            self.camera.start()
-            
-            # Reapply camera settings after reconfiguration
-            self.update_camera_settings()
-            
-            # Capture the image using capture_array() to respect exposure settings
-            # This method properly waits for the exposure time
-            array = self.camera.capture_array()
-            
-            # Convert array to image and save
-            # Convert from RGB to BGR for OpenCV
-            if len(array.shape) == 3 and array.shape[2] == 3:
-                array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
-            
-            # Save the image
-            cv2.imwrite(filename, array)
-            
-            # Restart preview if it was running
-            if was_started:
-                self.camera.stop()
-                preview_config = self.create_preview_configuration()
-                self.configure(preview_config)
+
+        was_started = self.started
+        last_exception = None
+
+        for attempt in range(self.CAPTURE_MAX_ATTEMPTS):
+            try:
+                if self.started:
+                    self.camera.stop()
+                    self.started = False
+
+                still_config = self.create_still_configuration()
+                self.configure(still_config)
                 self.camera.start()
-                # Reapply settings for preview mode too
+                self.started = True
+
+                # Reapply camera settings after reconfiguration
                 self.update_camera_settings()
-                
-            logger.info(f"Successfully captured to {filename}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to capture file: {e}")
-            raise
+
+                # Capture the image using capture_array() to respect exposure settings
+                array = self.camera.capture_array()
+
+                # Convert array to image and save
+                if len(array.shape) == 3 and array.shape[2] == 3:
+                    array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+
+                cv2.imwrite(filename, array)
+
+                # Stop still capture configuration
+                if self.started:
+                    self.camera.stop()
+                    self.started = False
+
+                # Restart preview if it was previously running
+                if was_started:
+                    preview_config = self.create_preview_configuration()
+                    self.configure(preview_config)
+                    self.camera.start()
+                    self.started = True
+                    self.update_camera_settings()
+
+                self.capture_status = "Ready"
+                logger.info(f"Successfully captured to {filename}")
+                return True
+
+            except Exception as exc:  # noqa: BLE001 - we need to retry on any failure
+                last_exception = exc
+                logger.exception(
+                    "Failed to capture file on attempt %s/%s: %s",
+                    attempt + 1,
+                    self.CAPTURE_MAX_ATTEMPTS,
+                    exc,
+                )
+
+                self.capture_status = f"Capture failed: {exc}"
+
+                try:
+                    if self.camera:
+                        self.camera.stop()
+                except Exception as stop_error:  # noqa: BLE001 - log and continue
+                    logger.debug("Error stopping camera during capture retry: %s", stop_error)
+                finally:
+                    self.started = False
+
+                if attempt < self.CAPTURE_MAX_ATTEMPTS - 1:
+                    backoff = self.CAPTURE_RETRY_BACKOFF * (2 ** attempt)
+                    time.sleep(backoff)
+                    continue
+
+                # Final attempt failed; try to restore preview state if needed
+                if was_started:
+                    try:
+                        preview_config = self.create_preview_configuration()
+                        self.configure(preview_config)
+                        self.camera.start()
+                        self.started = True
+                        self.update_camera_settings()
+                    except Exception as restore_error:  # noqa: BLE001
+                        logger.exception(
+                            "Failed to restore preview after capture error: %s",
+                            restore_error,
+                        )
+
+        if last_exception is not None:
+            logger.error(f"Failed to capture file: {last_exception}")
+
+        raise last_exception if last_exception else Exception("Unknown capture failure")
     
     def capture_image(self):
         """Capture an image and return success status and image data.

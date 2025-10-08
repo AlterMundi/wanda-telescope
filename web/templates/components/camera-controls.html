@@ -1,91 +1,114 @@
-<div class="controls">
-    <h2>Camera Controls</h2>
-    <form method="post">
-        <p>
-            Exposure Time in Seconds (0.1s - 230s): 
-            <input type="range" name="exposure" min="0" max="1000" step="1" value="{{ slider_value }}"
-                oninput="CameraControls.updateExposure(this.value)">
-            <output id="exposure_display">{{ current_exposure }}</output>
-        </p>
-        <div class="exposure-presets">
-            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(0.5)" 
-                    title="Bright Objects: For the Moon or planets">
-                Bright Objects (0.5s)
-            </button>
-            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(30)" 
-                    title="Deep Sky: For nebulae and galaxies">
-                Deep Sky (30s)
-            </button>
-            <button type="button" class="preset-btn" onclick="CameraControls.setPreset(300)" 
-                    title="Long Exposure: For faint deep-sky objects">
-                Long Exposure (300s)
-            </button>
+{% set slider_id = 'exposure-slider' %}
+{% set iso_id = 'iso-slider' %}
+
+<div class="ui-controls">
+    <form method="post" class="ui-form" data-component="camera">
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">Exposure Settings</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-field">
+                    <label for="{{ slider_id }}" class="ui-field__label">Exposure Time</label>
+                    <div class="ui-field__value">
+                        <input id="{{ slider_id }}" type="range" name="exposure" min="0" max="1000" step="1"
+                               value="{{ slider_value }}" data-role="exposure-slider">
+                        <output data-bind="exposure-display">{{ current_exposure }}</output>
+                    </div>
+                    <p class="ui-field__hint">Range: 0.1s – 230s</p>
+                </div>
+                <div class="ui-button-grid">
+                    <button type="button" class="ui-chip-button" data-preset="0.5">Bright Objects</button>
+                    <button type="button" class="ui-chip-button" data-preset="30">Deep Sky</button>
+                    <button type="button" class="ui-chip-button" data-preset="180">Long Exposure</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">ISO Sensitivity</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-field">
+                    <label for="{{ iso_id }}" class="ui-field__label">ISO</label>
+                    <div class="ui-field__value">
+                        <input id="{{ iso_id }}" type="range" name="iso" min="0" max="1000" step="1"
+                               value="{{ iso_slider_value }}" data-role="iso-slider">
+                        <output data-bind="iso-display">{{ current_iso_label }}</output>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">Image Quality</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-field">
+                    <label class="ui-field__label">Night Vision Mode</label>
+                    <div class="ui-field__switch">
+                        <input type="checkbox" name="night_vision_mode" id="night-vision" class="ui-switch"
+                               {{ 'checked' if night_vision_mode else '' }} data-role="night-vision-toggle">
+                        <label for="night-vision">Enable</label>
+                    </div>
+                </div>
+                <div class="ui-field" data-night-vision-intensity>
+                    <label for="night-vision-intensity" class="ui-field__label">Night Vision Intensity</label>
+                    <div class="ui-field__value">
+                        <input id="night-vision-intensity" type="range" name="night_vision_intensity"
+                               min="1.0" max="80.0" step="0.1" value="{{ night_vision_intensity }}"
+                               {{ '' if night_vision_mode else 'disabled' }}>
+                        <output data-bind="night-vision-display">{{ night_vision_intensity }}</output>
+                    </div>
+                </div>
+                <div class="ui-button-grid">
+                    <button type="button" class="ui-chip-button" data-night-vision-preset="10">Low</button>
+                    <button type="button" class="ui-chip-button" data-night-vision-preset="40">Medium</button>
+                    <button type="button" class="ui-chip-button" data-night-vision-preset="70">High</button>
+                </div>
+                <div class="ui-field">
+                    <label class="ui-field__label">Save RAW Files</label>
+                    <div class="ui-field__switch">
+                        <input type="checkbox" name="save_raw" id="save-raw" class="ui-switch"
+                               {{ 'checked' if save_raw else '' }}>
+                        <label for="save-raw">Enable</label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ui-control-group" data-collapsible>
+            <header class="ui-control-header" data-collapsible-trigger>
+                <span class="ui-control-title">Performance</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="ui-icon ui-icon--chevron"><path d="M12 15.5 6.5 10l1.4-1.4L12 12.7l4.1-4.1L17.5 10Z"/></svg>
+            </header>
+            <div class="ui-control-body" data-collapsible-content>
+                <div class="ui-field">
+                    <label for="performance" class="ui-field__label">Quality vs CPU Usage</label>
+                    <div class="ui-field__value">
+                        <input id="performance" type="range" name="performance" min="0" max="5" step="1"
+                               value="{{ skip_frames }}" data-role="performance-slider">
+                        <output data-bind="performance-display">{{ performance_text }}</output>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="ui-form__actions">
+            <button type="submit" class="ui-button ui-button--primary">Apply Settings</button>
         </div>
-        <p>
-            ISO Sensitivity (100-1600): 
-            <input type="range" name="iso" min="0" max="1000" step="1" value="{{ iso_slider_value }}"
-                oninput="CameraControls.updateISO(this.value)" 
-                title="Higher sensitivity brightens images but adds noise (100-1600 range matches IMX477 sensor capabilities)">
-            <output id="iso_display">{{ current_iso_label }}</output>
-        </p>
-        <div class="toggle-container">
-            <label class="toggle-option">
-                <input type="checkbox" name="night_vision_mode" {{ 'checked' if night_vision_mode else '' }}
-                       onchange="CameraControls.toggleNightVision(this)">
-                <span style="margin-left: 8px;">Night Vision Mode</span>
-            </label>
-            <span class="toggle-status">{{ ' (Enabled)' if night_vision_mode else ' (Disabled)' }}</span>
-        </div>
-        <p id="night-vision-container" {{ 'style="opacity: 1.0;"' if night_vision_mode else 'style="opacity: 0.5;"' }}
-           title="Enhances faint celestial details by combining digital gain and night sky boost">
-            Intensity (1.0-80.0): 
-            <input type="range" name="night_vision_intensity" min="1.0" max="80.0" step="0.1" value="{{ night_vision_intensity }}"
-                oninput="CameraControls.updateNightVisionIntensity(this.value)" {{ '' if night_vision_mode else 'disabled' }}>
-            <output id="night_vision_intensity_display">{{ night_vision_intensity }}</output>
-        </p>
-        <div class="night-vision-presets">
-            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(10)" 
-                    title="Low intensity for subtle enhancement">
-                Low
-            </button>
-            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(40)" 
-                    title="Medium intensity for balanced enhancement">
-                Medium
-            </button>
-            <button type="button" class="preset-btn" onclick="CameraControls.setNightVisionIntensity(80)" 
-                    title="High intensity for maximum enhancement">
-                High
-            </button>
-        </div>
-        <div class="toggle-container">
-            <label class="toggle-option">
-                <input type="checkbox" name="save_raw" {{ 'checked' if save_raw else '' }}>
-                <span style="margin-left: 8px;">Save RAW files</span>
-            </label>
-            <span class="toggle-status">{{ ' (Enabled)' if save_raw else ' (Disabled)' }}</span>
-        </div>
-        
-        <p>
-            Performance (CPU Usage vs Quality):
-            <input type="range" name="performance" min="0" max="5" step="1" value="{{ skip_frames }}"
-                oninput="this.nextElementSibling.value = Utils.performanceLabel(this.value)">
-            <output>{{ performance_text }}</output>
-        </p>
-        <input type="submit" value="Apply Settings">
     </form>
-    
-    <!-- Fixed version with form ID and data attribute instead of inline JS -->
-    <form id="capture-form" action="{{ url_for('capture_still') }}" method="post" 
-          data-exposure-seconds="{{ exposure_seconds }}">
-        <input type="submit" value="Capture Photo" {{ 'disabled' if recording else '' }}>
-    </form>
-    
-    <form action="{{ url_for('start_video') }}" method="post">
-        <input type="submit" value="Start Video" {{ 'disabled' if recording else '' }}>
-    </form>
-    <form action="{{ url_for('stop_video') }}" method="post">
-        <input type="submit" value="Stop Video" {{ 'disabled' if not recording else '' }}>
-    </form>
-    <div class="status" id="countdown"></div>
-    <div class="status" id="status_display">{{ capture_status }}</div>
+
+    <div class="ui-divider"></div>
+
+    <div class="ui-stack" data-component="capture-actions">
+        <div class="ui-status" data-countdown></div>
+        <div class="ui-status" data-capture-status>{{ capture_status }}</div>
+        <button type="button" class="ui-button ui-button--primary" data-action="capture-still-proxy">Capture Still</button>
+    </div>
 </div>
