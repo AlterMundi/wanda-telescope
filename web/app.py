@@ -1,71 +1,67 @@
 """
 Web application for Wanda astrophotography system.
-Provides a web interface to control the camera and mount.
+Provides a REST API and MJPEG video feed for the Next.js frontend.
 """
-import math
-import time
 import logging
 import os
-from flask import Flask, Response, request, redirect, url_for, render_template, jsonify
+import time
+from typing import Any, Dict, List, Optional, Sequence
+
+from flask import Flask, Response, request
+from flask_cors import CORS
+
 import config
-from camera import CameraFactory
+from camera import CameraFactory  # noqa: F401 (retained for backward compatibility)
 from mount.controller import MountController
 from session import SessionController
 
+from .api_responses import error_response, success_response
+
 logger = logging.getLogger(__name__)
 
+
 class WandaApp:
-    """Web application for controlling the Wanda system."""
-    
-    def __init__(self, camera=None):
-        """Initialize the web application with controllers."""
-        # Create Flask app with proper template and static folders
-        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
-        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-        
-        self.app = Flask(__name__, 
-                         template_folder=template_dir,
-                         static_folder=static_dir)
-                         
+    """Flask application exposing REST endpoints for the Wanda system."""
+
+    def __init__(self, camera=None, *, cors_origins: Optional[Sequence[str]] = None):
         if camera is None:
             raise ValueError("Camera instance is required")
+
         self.camera = camera
         self.mount = MountController()
-        self.session_controller = SessionController(self.camera, self.mount, self.camera.capture_dir)
-        self.setup_routes()
-        logger.info("Web application initialized")
-    
-    def setup_routes(self):
-        """Set up the application routes."""
-        # Main routes
-        self.app.route('/', methods=['GET', 'POST'])(self.index)
-        self.app.route('/video_feed')(self.video_feed)
-        
-        # Camera routes
-        self.app.route('/capture_still', methods=['POST'])(self.capture_still)
-        self.app.route('/start_video', methods=['POST'])(self.start_video)
-        self.app.route('/stop_video', methods=['POST'])(self.stop_video)
-        self.app.route('/capture_status')(self.get_capture_status)
-        
-        # Mount routes
-        self.app.route('/start_tracking', methods=['POST'])(self.start_tracking)
-        self.app.route('/stop_tracking', methods=['POST'])(self.stop_tracking)
-        
-        # Session routes
-        self.app.route('/start_session', methods=['POST'])(self.start_session)
-        self.app.route('/stop_session', methods=['POST'])(self.stop_session)
-        self.app.route('/session_status')(self.get_session_status)
-    
+        self.session_controller = SessionController(
+            self.camera, self.mount, self.camera.capture_dir
+        )
+
+        self.app = Flask(__name__)
+
+        self._cors_origins = list(cors_origins) if cors_origins else ["http://localhost:3000"]
+        CORS(self.app, origins=self._cors_origins)
+
+        @self.app.after_request
+        def _inject_default_cors_headers(response):  # type: ignore[override]
+            if self._cors_origins:
+                response.headers.setdefault("Access-Control-Allow-Origin", self._cors_origins[0])
+                response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
+                response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            return response
+
+        self._register_routes()
+        logger.info("REST web application initialized")
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
     def run(self):
         """Run the web application."""
         try:
-            logger.info(f"Starting web server on {config.HOST}:{config.PORT}")
+            logger.info("Starting web server on %s:%s", config.HOST, config.PORT)
             self.app.run(host=config.HOST, port=config.PORT, threaded=True)
-        except Exception as e:
-            logger.error(f"Error in web server: {e}")
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error("Error in web server: %s", exc)
         finally:
             self.cleanup()
-    
+
     def cleanup(self):
         """Clean up resources when shutting down."""
         logger.info("Application shutting down, cleaning up resources...")
@@ -73,338 +69,384 @@ class WandaApp:
         self.mount.cleanup()
         self.session_controller.cleanup()
         logger.info("Application shutdown complete")
-    
-    # Route handlers
-    def index(self):
-        """Handle the main page request."""
-        if request.method == 'POST':
-            self._handle_post_request()
-            
-            # Return JSON response if this is an AJAX request
-            if request.headers.get('Accept') == 'application/json':
-                template_vars = self._prepare_template_vars()
-                return jsonify(template_vars)
-        
-        # Prepare template variables for regular page render
-        template_vars = self._prepare_template_vars()
-        return render_template('index.html', **template_vars)
-    
-    def _handle_post_request(self):
-        """Handle POST requests to the main page."""
-        # Camera settings
-        slider_value = request.form.get('exposure', type=int)
-        iso = request.form.get('iso', type=int)
-        
-        # Handle camera settings - apply both exposure and ISO together
-        if slider_value is not None or iso is not None:
-            # Convert slider value to exposure time in seconds, then to microseconds
-            if slider_value is not None:
-                exposure_seconds = self._slider_to_seconds(slider_value)
-                exposure_us = int(exposure_seconds * 1000000)
-            else:
-                exposure_us = self.camera.get_exposure_us()
 
-            # Convert ISO slider value (0-1000) to actual ISO value, with validation
-            if iso is not None:
-                min_iso = 100  # Maps to gain 1.0 (IMX477 minimum)
-                max_iso = 1600  # Maps to gain 16.0 (IMX477 maximum)
-                try:
-                    iso_slider_value = int(iso)
-                    # Convert slider value to ISO value
-                    actual_iso = min_iso + (max_iso - min_iso) * iso_slider_value / 1000
-                    actual_iso = max(min_iso, min(max_iso, actual_iso))  # Clamp to range
-                except (ValueError, TypeError):
-                    actual_iso = 800  # Default to Medium
-                gain = self.camera.iso_to_gain(actual_iso)
-            else:
-                gain = self.camera.gain
+    # ------------------------------------------------------------------
+    # Route registration
+    # ------------------------------------------------------------------
+    def _register_routes(self):
+        self.app.route("/video_feed", methods=["GET"])(self._video_feed)
 
-            # Apply both exposure and gain to camera
-            self.camera.set_exposure_us(exposure_us, gain)
-        
-        # Night vision mode settings
-        self.camera.night_vision_mode = 'night_vision_mode' in request.form
-        
-        night_vision_intensity = request.form.get('night_vision_intensity', type=float)
-        if night_vision_intensity is not None:
-            self.camera.night_vision_intensity = max(1.0, min(night_vision_intensity, 80.0))
-        
-        # RAW toggle
-        self.camera.save_raw = 'save_raw' in request.form
-        
-        # Performance setting
-        performance_value = request.form.get('performance', type=int)
-        if performance_value is not None:
-            self.camera.skip_frames = performance_value
-        
-        # Apply camera settings
-        self.camera.update_camera_settings()
-        
-        # Handle mount settings
-        mount_speed = request.form.get('mount_speed', type=float)
-        mount_dir = request.form.get('mount_direction')
-        
-        if mount_speed is not None or mount_dir is not None:
-            direction = (mount_dir == 'clockwise') if mount_dir is not None else None
-            self.mount.update_settings(speed=mount_speed, direction=direction)
-    
-    def _prepare_template_vars(self):
-        """Prepare template variables for the index page."""
-        # Convert exposure time to seconds for display
-        exposure_seconds = self.camera.get_exposure_seconds()
-        current_exposure = self._format_exposure_display(exposure_seconds)
-        
-        # Convert current ISO to slider value and label
-        current_iso = self.camera.gain_to_iso(self.camera.gain)
-        iso_slider_value, current_iso_label = self._iso_to_slider_and_label(current_iso)
-        
-        # Calculate slider value from exposure time in seconds
-        min_seconds = 0.1
-        max_seconds = 230  # IMX477 sensor maximum
-        slider_max = 1000
-        log_range = math.log(max_seconds / min_seconds)
-        slider_value = int(1000 * math.log(exposure_seconds / min_seconds) / log_range)
-        slider_value = max(0, min(slider_value, slider_max))
-        
-        # Get current exposure time in seconds for the countdown
-        exposure_seconds = self.camera.get_exposure_seconds()
-        
-        # Convert performance setting to text
-        performance_labels = ['High Quality', 'Good Quality', 'Balanced', 'Moderate', 'Low CPU', 'Lowest CPU']
-        performance_text = performance_labels[min(self.camera.skip_frames, len(performance_labels) - 1)]
-        
-        return {
-            'current_exposure': current_exposure,
-            'iso_slider_value': iso_slider_value,
-            'current_iso_label': current_iso_label,
-            'slider_value': slider_value,
-            'exposure_seconds': exposure_seconds,
-            'night_vision_mode': self.camera.night_vision_mode,
-            'night_vision_intensity': self.camera.night_vision_intensity,
-            'save_raw': self.camera.save_raw,
-            'skip_frames': self.camera.skip_frames,
-            'performance_text': performance_text,
-            'recording': self.camera.recording,
-            'capture_status': self.camera.capture_status,
-            'capture_dir': self.camera.capture_dir,
-            'mount_status': self.mount.status,
-            'mount_tracking': self.mount.tracking,
-            'mount_direction': self.mount.direction,
-            'mount_speed': self.mount.speed
-        }
-    
-    def _format_exposure_display(self, seconds):
-        """Format exposure time in seconds for display."""
-        if seconds < 1:
-            return f"{seconds:.1f}s"
-        elif seconds < 10:
-            return f"{seconds:.1f}s"
-        else:
-            return f"{int(seconds)}s"
-    
-    def _slider_to_seconds(self, slider_value):
-        """Convert slider value (0-1000) to exposure time in seconds."""
-        import math
-        min_seconds = 0.1
-        max_seconds = 230  # IMX477 sensor maximum
-        log_range = math.log(max_seconds / min_seconds)
-        return min_seconds * math.exp(slider_value * log_range / 1000)
-    
-    def _iso_to_slider_and_label(self, iso_value):
-        """Convert ISO value to slider position and display label."""
-        min_iso = 100  # Maps to gain 1.0 (IMX477 minimum)
-        max_iso = 1600  # Maps to gain 16.0 (IMX477 maximum)
-        
-        # Convert ISO value to slider position (0-1000)
-        slider_value = int(1000 * (iso_value - min_iso) / (max_iso - min_iso))
-        slider_value = max(0, min(1000, slider_value))  # Clamp to range
-        
-        # Check if we're near milestone values for display
-        milestones = [100, 800, 1600]
-        milestone_labels = {100: 'Low (100)', 800: 'Medium (800)', 1600: 'High (1600)'}
-        
-        # Find if we're close to a milestone
-        for milestone in milestones:
-            if abs(iso_value - milestone) <= 50:  # Same threshold as frontend
-                return slider_value, milestone_labels[milestone]
-        
-        # If not near a milestone, show the actual value
-        return slider_value, str(int(iso_value))
-    
-    def video_feed(self):
-        """Stream video feed from the camera."""
-        def generate():
-            while True:
-                frame_data = self.camera.get_frame()
-                if frame_data is not None:
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
-                else:
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + b'' + b'\r\n')
-                time.sleep(0.1)
-                
-        return Response(generate(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    
-    def get_capture_status(self):
-        """Return the current capture status."""
-        return jsonify({
-            'capture_status': self.camera.capture_status,
-            'recording': self.camera.recording
-        })
-    
-    # Camera route handlers
-    def capture_still(self):
-        """Capture a still image."""
-        # Update initial status
-        self.camera.capture_status = "Preparing to capture..."
-        success = self.camera.capture_still()
-        
-        # If AJAX request, return JSON
-        if request.headers.get('Accept') == 'application/json':
-            return jsonify({
-                'success': success,
-                'capture_status': self.camera.capture_status,
-                'recording': self.camera.recording,
-                'exposure_seconds': self.camera.get_exposure_seconds(),
-                'capture_initiated': True
-            })
-        
-        # Otherwise, redirect to index
-        return redirect(url_for('index'))
-    
-    def start_video(self):
-        """Start video recording."""
-        success = self.camera.start_video()
-        
-        # If AJAX request, return JSON
-        if request.headers.get('Accept') == 'application/json':
-            return jsonify({
-                'success': success,
-                'capture_status': self.camera.capture_status,
-                'recording': self.camera.recording
-            })
-        
-        # Otherwise, redirect to index
-        return redirect(url_for('index'))
-    
-    def stop_video(self):
-        """Stop video recording."""
-        success = self.camera.stop_video()
-        
-        # If AJAX request, return JSON
-        if request.headers.get('Accept') == 'application/json':
-            return jsonify({
-                'success': success,
-                'capture_status': self.camera.capture_status,
-                'recording': self.camera.recording
-            })
-        
-        # Otherwise, redirect to index
-        return redirect(url_for('index'))
-    
-    # Mount route handlers
-    def start_tracking(self):
-        """Start mount tracking."""
-        success = self.mount.start_tracking()
-        
-        # If AJAX request, return JSON
-        if request.headers.get('Accept') == 'application/json':
-            return jsonify({
-                'success': success,
-                'mount_status': self.mount.status,
-                'mount_tracking': self.mount.tracking
-            })
-        
-        # Otherwise, redirect to index
-        return redirect(url_for('index'))
-    
-    def stop_tracking(self):
-        """Stop mount tracking."""
-        success = self.mount.stop_tracking()
-        
-        # If AJAX request, return JSON
-        if request.headers.get('Accept') == 'application/json':
-            return jsonify({
-                'success': success,
-                'mount_status': self.mount.status,
-                'mount_tracking': self.mount.tracking
-            })
-        
-        # Otherwise, redirect to index
-        return redirect(url_for('index'))
-    
-    # Session route handlers
-    def start_session(self):
-        """Start a capture session."""
+        # Camera endpoints
+        self.app.route("/api/camera/status", methods=["GET"])(self._camera_status)
+        self.app.route("/api/camera/settings", methods=["POST"])(self._update_camera_settings)
+        self.app.route("/api/camera/capture", methods=["POST"])(self._capture_still)
+
+        # Mount endpoints
+        self.app.route("/api/mount/status", methods=["GET"])(self._mount_status)
+        self.app.route("/api/mount/tracking", methods=["POST"])(self._mount_tracking)
+
+        # Session endpoints
+        self.app.route("/api/session/status", methods=["GET"])(self._session_status)
+        self.app.route("/api/session/start", methods=["POST"])(self._start_session)
+        self.app.route("/api/session/stop", methods=["POST"])(self._stop_session)
+
+        # Captures
+        self.app.route("/api/captures", methods=["GET"])(self._list_captures)
+
+    # ------------------------------------------------------------------
+    # Camera handlers
+    # ------------------------------------------------------------------
+    def _camera_status(self):
         try:
-            # Get session parameters from form
-            name = request.form.get('session_name', '').strip()
-            total_images = request.form.get('total_images', type=int)
-            use_current_settings = 'use_current_settings' in request.form
-            enable_tracking = 'enable_tracking' in request.form
+            data = {
+                "mode": getattr(self.camera, "mode", "still"),
+                "capture_status": getattr(self.camera, "capture_status", "Idle"),
+                "recording": getattr(self.camera, "recording", False),
+                "iso": self._safe_camera_call("gain_to_iso", self.camera.gain),
+                "gain": getattr(self.camera, "gain", 0.0),
+                "exposure_seconds": self._safe_camera_call("get_exposure_seconds", default=0.0),
+                "night_vision_mode": getattr(self.camera, "night_vision_mode", False),
+                "night_vision_intensity": getattr(self.camera, "night_vision_intensity", 0.0),
+                "save_raw": getattr(self.camera, "save_raw", False),
+                "skip_frames": getattr(self.camera, "skip_frames", 0),
+            }
+            return success_response(data, message="Camera status retrieved")
+        except Exception as exc:
+            logger.exception("Failed to retrieve camera status")
+            return error_response(
+                code="STATUS_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
 
-            # Handle time parameters (hours and minutes)
-            total_time_hours = request.form.get('total_time_hours', type=int)
-            total_time_minutes = request.form.get('total_time_minutes', type=int)
+    def _update_camera_settings(self):
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return error_response(
+                code="INVALID_REQUEST",
+                message="Request body must be valid JSON",
+                http_status=400,
+            )
 
-            # Convert to total hours if both are provided
-            if total_time_hours is not None or total_time_minutes is not None:
-                hours = total_time_hours or 0
-                minutes = total_time_minutes or 0
-                total_time_hours = hours + (minutes / 60.0)
+        try:
+            updates_applied: List[str] = []
+
+            exposure_seconds = payload.get("exposure_seconds")
+            iso_value = payload.get("iso")
+
+            exposure_us: Optional[int] = None
+            gain: Optional[float] = None
+
+            if exposure_seconds is not None:
+                exposure_seconds = float(exposure_seconds)
+                if exposure_seconds <= 0:
+                    raise ValueError("exposure_seconds must be greater than 0")
+                exposure_us = int(exposure_seconds * 1_000_000)
+                updates_applied.append("exposure_seconds")
+
+            if iso_value is not None:
+                iso_value = float(iso_value)
+                if iso_value <= 0:
+                    raise ValueError("iso must be greater than 0")
+                gain = self.camera.iso_to_gain(iso_value)
+                updates_applied.append("iso")
+
+            if exposure_us is not None or gain is not None:
+                self.camera.set_exposure_us(
+                    exposure_us if exposure_us is not None else self.camera.get_exposure_us(),
+                    gain,
+                )
+
+            if "night_vision_mode" in payload:
+                self.camera.night_vision_mode = bool(payload["night_vision_mode"])
+                updates_applied.append("night_vision_mode")
+
+            if "night_vision_intensity" in payload:
+                intensity = float(payload["night_vision_intensity"])
+                self.camera.night_vision_intensity = max(1.0, min(80.0, intensity))
+                updates_applied.append("night_vision_intensity")
+
+            if "save_raw" in payload:
+                self.camera.save_raw = bool(payload["save_raw"])
+                updates_applied.append("save_raw")
+
+            if "skip_frames" in payload:
+                self.camera.skip_frames = int(payload["skip_frames"])
+                updates_applied.append("skip_frames")
+
+            self.camera.update_camera_settings()
+
+            return success_response(
+                {
+                    "updates": updates_applied,
+                    "exposure_seconds": self._safe_camera_call("get_exposure_seconds", default=0.0),
+                    "iso": self._safe_camera_call("gain_to_iso", self.camera.gain),
+                },
+                message="Camera settings updated",
+            )
+        except ValueError as validation_error:
+            return error_response(
+                code="VALIDATION_ERROR",
+                message=str(validation_error),
+                http_status=400,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.exception("Failed to update camera settings")
+            return error_response(
+                code="SETTINGS_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    def _capture_still(self):
+        try:
+            success = self.camera.capture_still()
+
+            if not success:
+                return error_response(
+                    code="CAPTURE_FAILED",
+                    message="Unable to capture image",
+                    http_status=500,
+                )
+
+            data = {
+                "capture_status": getattr(self.camera, "capture_status", "Completed"),
+                "recording": getattr(self.camera, "recording", False),
+            }
+            return success_response(data, message="Capture complete")
+        except Exception as exc:
+            logger.exception("Capture still failed")
+            return error_response(
+                code="CAPTURE_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    # ------------------------------------------------------------------
+    # Mount handlers
+    # ------------------------------------------------------------------
+    def _mount_status(self):
+        data = {
+            "status": getattr(self.mount, "status", "Unknown"),
+            "tracking": getattr(self.mount, "tracking", False),
+            "direction": getattr(self.mount, "direction", True),
+            "speed": getattr(self.mount, "speed", 0.0),
+        }
+        return success_response(data, message="Mount status retrieved")
+
+    def _mount_tracking(self):
+        payload = request.get_json(silent=True) or {}
+        action = payload.get("action")
+
+        if action not in {"start", "stop"}:
+            return error_response(
+                code="INVALID_ACTION",
+                message="action must be either 'start' or 'stop'",
+                http_status=400,
+            )
+
+        try:
+            if action == "start":
+                if "speed" in payload or "direction" in payload:
+                    self.mount.update_settings(
+                        speed=payload.get("speed"),
+                        direction=self._normalize_direction(payload.get("direction")),
+                    )
+                self.mount.start_tracking()
+            else:
+                self.mount.stop_tracking()
+
+            return success_response(
+                {
+                    "status": getattr(self.mount, "status", "Unknown"),
+                    "tracking": getattr(self.mount, "tracking", False),
+                },
+                message="Tracking action applied",
+            )
+        except Exception as exc:
+            logger.exception("Mount tracking action failed")
+            return error_response(
+                code="MOUNT_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    # ------------------------------------------------------------------
+    # Session handlers
+    # ------------------------------------------------------------------
+    def _session_status(self):
+        try:
+            status = self.session_controller.get_session_status()
+            return success_response(status, message="Session status retrieved")
+        except Exception as exc:
+            logger.exception("Failed to retrieve session status")
+            return error_response(
+                code="SESSION_STATUS_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    def _start_session(self):
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return error_response(
+                code="INVALID_REQUEST",
+                message="Request body must be valid JSON",
+                http_status=400,
+            )
+
+        try:
+            name = str(payload.get("name", "")).strip()
+            total_images = payload.get("total_images")
+            use_current_settings = bool(payload.get("use_current_settings", False))
+            enable_tracking = bool(payload.get("enable_tracking", False))
+            total_time_hours = payload.get("total_time_hours")
+
+            if not name:
+                raise ValueError("Session name is required")
+
+            if total_images is None:
+                raise ValueError("total_images is required")
+
+            total_images = int(total_images)
+            if total_images <= 0:
+                raise ValueError("total_images must be greater than 0")
+
+            if total_time_hours is not None:
+                total_time_hours = float(total_time_hours)
+                if total_time_hours <= 0:
+                    raise ValueError("total_time_hours must be greater than 0")
             else:
                 total_time_hours = None
-            
-            # Validate required parameters
-            if not name:
-                return jsonify({'success': False, 'error': 'Session name is required'})
-            
-            if not total_images or total_images <= 0:
-                return jsonify({'success': False, 'error': 'Total images must be greater than 0'})
 
-            if total_time_hours is not None and total_time_hours <= 0:
-                return jsonify({'success': False, 'error': 'Total time must be greater than 0'})
-            
-            # Start the session
             success = self.session_controller.start_session(
                 name=name,
                 total_images=total_images,
                 use_current_settings=use_current_settings,
                 enable_tracking=enable_tracking,
-                total_time_hours=total_time_hours if total_time_hours and total_time_hours > 0 else None
+                total_time_hours=total_time_hours,
             )
-            
-            return jsonify({
-                'success': success,
-                'session_status': self.session_controller.get_session_status()
-            })
-            
-        except Exception as e:
-            logger.error(f"Error starting session: {e}")
-            return jsonify({'success': False, 'error': str(e)})
-    
-    def stop_session(self):
-        """Stop the current session."""
+
+            if not success:
+                return error_response(
+                    code="SESSION_START_FAILED",
+                    message="Failed to start capture session",
+                    http_status=500,
+                )
+
+            return success_response(
+                {
+                    "session_status": self.session_controller.get_session_status(),
+                },
+                message="Session started",
+            )
+        except ValueError as validation_error:
+            return error_response(
+                code="VALIDATION_ERROR",
+                message=str(validation_error),
+                http_status=400,
+            )
+        except Exception as exc:
+            logger.exception("Failed to start session")
+            return error_response(
+                code="SESSION_START_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    def _stop_session(self):
         try:
             success = self.session_controller.stop_session()
-            
-            return jsonify({
-                'success': success,
-                'session_status': self.session_controller.get_session_status()
-            })
-            
-        except Exception as e:
-            logger.error(f"Error stopping session: {e}")
-            return jsonify({'success': False, 'error': str(e)})
-    
-    def get_session_status(self):
-        """Get current session status."""
+            if not success:
+                return error_response(
+                    code="SESSION_STOP_FAILED",
+                    message="Failed to stop capture session",
+                    http_status=500,
+                )
+
+            return success_response(
+                {
+                    "session_status": self.session_controller.get_session_status(),
+                },
+                message="Session stopped",
+            )
+        except Exception as exc:
+            logger.exception("Failed to stop session")
+            return error_response(
+                code="SESSION_STOP_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    # ------------------------------------------------------------------
+    # Capture listing
+    # ------------------------------------------------------------------
+    def _list_captures(self):
+        capture_dir = getattr(self.camera, "capture_dir", "captures")
         try:
-            status = self.session_controller.get_session_status()
-            return jsonify(status)
-            
-        except Exception as e:
-            logger.error(f"Error getting session status: {e}")
-            return jsonify({'error': str(e)})
+            files = sorted(os.listdir(capture_dir))
+        except FileNotFoundError:
+            files = []
+        except Exception as exc:
+            logger.exception("Failed to list captures")
+            return error_response(
+                code="CAPTURE_LIST_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+        return success_response({"files": files}, message="Capture list retrieved")
+
+    # ------------------------------------------------------------------
+    # Video feed (unchanged behaviour)
+    # ------------------------------------------------------------------
+    def _video_feed(self):
+        def generate():
+            while True:
+                try:
+                    frame_data = self.camera.get_frame()
+                    if frame_data is not None:
+                        yield (
+                            b"--frame\r\n"
+                            b"Content-Type: image/jpeg\r\n\r\n" + frame_data + b"\r\n"
+                        )
+                    else:
+                        yield (
+                            b"--frame\r\n"
+                            b"Content-Type: image/jpeg\r\n\r\n" + b"" + b"\r\n"
+                        )
+                except Exception as exc:  # pragma: no cover - generator resilience
+                    logger.error("Video feed error: %s", exc)
+                    break
+                time.sleep(0.1)
+
+        return Response(
+            generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _safe_camera_call(self, attr: str, *args: Any, default: Any = None) -> Any:
+        method = getattr(self.camera, attr, None)
+        if callable(method):
+            try:
+                return method(*args)  # type: ignore[misc]
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning("Camera call %s failed: %s", attr, exc)
+        return default
+
+    @staticmethod
+    def _normalize_direction(direction: Any) -> Optional[bool]:
+        if direction is None:
+            return None
+        if isinstance(direction, bool):
+            return direction
+        if isinstance(direction, str):
+            lowered = direction.strip().lower()
+            if lowered in {"cw", "clockwise"}:
+                return True
+            if lowered in {"ccw", "counterclockwise", "counter-clockwise"}:
+                return False
+        return None
