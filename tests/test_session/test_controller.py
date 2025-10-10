@@ -7,7 +7,7 @@ import json
 import time
 import threading
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock, mock_open
+from unittest.mock import ANY, Mock, patch, MagicMock, mock_open
 from session.controller import SessionController
 
 
@@ -32,10 +32,16 @@ class TestSessionController:
         return mount
 
     @pytest.fixture
-    def mock_session_controller(self, mock_camera, mock_mount):
+    def session_event_callback(self):
+        """Callback used to capture emitted session events."""
+        return Mock()
+
+    @pytest.fixture
+    def mock_session_controller(self, mock_camera, mock_mount, session_event_callback):
         """Mock SessionController instance for testing."""
         with patch('session.controller.logger'):
-            controller = SessionController(mock_camera, mock_mount)
+            controller = SessionController(mock_camera, mock_mount, event_callback=session_event_callback)
+            controller._test_event_callback = session_event_callback
             yield controller
 
     @pytest.fixture
@@ -264,6 +270,7 @@ class TestSessionController:
             # Assert
             mock_mount.stop_tracking.assert_called_once()
             assert controller.session_config['mount_tracking_stopped'] is True
+            controller._test_event_callback.assert_any_call('session_complete', ANY)
 
     def test_get_session_status_idle(self, mock_session_controller):
         """Test getting session status when idle."""
@@ -357,6 +364,8 @@ class TestSessionController:
                 # Should have attempted to capture 2 images
                 assert controller.session_config['images_captured'] == 2
                 assert controller.session_config['status'] == 'completed'
+                controller._test_event_callback.assert_any_call('session_progress', ANY)
+                controller._test_event_callback.assert_any_call('session_complete', ANY)
 
     @patch('time.sleep')
     def test_session_worker_stops_when_completed(self, mock_sleep, mock_session_controller):
@@ -396,8 +405,8 @@ class TestSessionController:
 
                 # Assert
                 assert controller.session_running is False  # Session should stop
-                # The key assertion is that the session stopped running after an exception
-                assert not controller.session_running
+                assert controller.session_config['status'] == 'error'
+                controller._test_event_callback.assert_any_call('session_error', ANY)
 
     def test_capture_session_image_with_capture_file(self, mock_session_controller):
         """Test capturing image with camera that has capture_file method."""
@@ -572,6 +581,7 @@ class TestSessionController:
         assert controller.session_config['status'] == 'completed'
         mock_mount.stop_tracking.assert_called_once()
         assert controller.session_config['mount_tracking_stopped'] is True
+        controller._test_event_callback.assert_any_call('session_complete', ANY)
 
     def test_start_session_mount_tracking_failure(self, mock_session_controller, mock_mount):
         """Test start_session when mount tracking fails to start."""
@@ -692,6 +702,7 @@ class TestSessionController:
 
             # Assert
             mock_logger.info.assert_any_call("Session status is error, not changing to completed")
+            controller._test_event_callback.assert_any_call('session_error', ANY)
 
     def test_session_worker_exception_handling(self, mock_session_controller):
         """Test session worker exception handling in the main loop."""
@@ -720,6 +731,7 @@ class TestSessionController:
                     mock_logger.error.assert_any_call("Session status set to error in except block: error")
                     # Check that the finally block didn't override the error status
                     mock_logger.info.assert_any_call("Session status is error, not changing to completed")
+                    controller._test_event_callback.assert_any_call('session_error', ANY)
 
     def test_calculate_capture_delay_no_time_based(self, mock_session_controller):
         """Test calculate_capture_delay for non-time-based sessions."""
@@ -1000,6 +1012,24 @@ class TestSessionController:
                 # Assert
                 assert len(status_calls) > 0
                 assert controller.session_config['images_captured'] == 3
+                controller._test_event_callback.assert_any_call('session_progress', ANY)
+
+    def test_start_session_emits_session_start(self, mock_session_controller):
+        controller = mock_session_controller
+        with patch('os.makedirs'):
+            with patch('session.controller.datetime'):
+                with patch('threading.Thread') as mock_thread:
+                    mock_thread.return_value = MagicMock()
+                    controller.start_session("event_session", 1)
+        controller._test_event_callback.assert_any_call('session_start', ANY)
+
+    def test_stop_session_emits_session_stop(self, mock_session_controller):
+        controller = mock_session_controller
+        controller.session_running = True
+        controller.session_config.update({'status': 'running', 'name': 'stop_test'})
+        with patch('session.controller.datetime'):
+            controller.stop_session()
+        controller._test_event_callback.assert_any_call('session_stop', ANY)
 
     def test_start_session_validation_comprehensive(self, mock_session_controller):
         """Test comprehensive validation of start_session parameters."""

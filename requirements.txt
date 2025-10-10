@@ -6,6 +6,9 @@ opencv-python==4.11.0.86
 numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0
 Flask-Cors==4.0.0
+Flask-SocketIO==5.3.5
+python-socketio==5.10.0
+eventlet==0.35.1
 
 # Test dependencies
 pytest>=7.0.0

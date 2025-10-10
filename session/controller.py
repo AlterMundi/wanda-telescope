@@ -9,7 +9,7 @@ import threading
 import glob
 import sys
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,13 @@ def safe_log(level, message, *args, **kwargs):
 class SessionController:
     """Controller class for managing capture sessions."""
     
-    def __init__(self, camera, mount, base_capture_dir="captures"):
+    def __init__(
+        self,
+        camera,
+        mount,
+        base_capture_dir="captures",
+        event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ):
         """Initialize the session controller.
         
         Args:
@@ -39,6 +45,7 @@ class SessionController:
         self.session_running = False
         self._shutdown = False
         self._session_lock = threading.Lock()  # Add lock to prevent race conditions
+        self._event_callback = event_callback
         
         # Session configuration
         self.session_config = {
@@ -127,6 +134,8 @@ class SessionController:
             self.session_running = True
             self.session_thread = threading.Thread(target=self._session_worker, daemon=True)
             self.session_thread.start()
+
+            self._emit_event("session_start", self.get_session_status())
             
             if total_time_hours is not None:
                 logger.info(f"Session '{name}' started: {total_images} images over {total_time_hours} hours")
@@ -157,6 +166,7 @@ class SessionController:
         if self.session_config['status'] == 'running':
             self.session_config['status'] = 'completed'
         self._save_session_metadata()
+        self._emit_event("session_stop", self.get_session_status())
         
         # Stop mount tracking if it was started by the session
         if (self.session_config.get('enable_tracking', False) and 
@@ -248,6 +258,7 @@ class SessionController:
                         
                         safe_log('info', f"Captured image {self.session_config['images_captured']}/"
                                   f"{self.session_config['total_images']}")
+                        self._emit_event("session_progress", self.get_session_status())
                 
                 # Calculate delay between captures
                 with self._session_lock:
@@ -262,6 +273,7 @@ class SessionController:
                 self.session_config['status'] = 'error'
                 self._save_session_metadata()
                 logger.error(f"Session status set to error in except block: {self.session_config['status']}")
+                self._emit_event("session_error", {"error": str(e), "status": self.get_session_status()})
             return  # Exit the worker immediately on error
         
         finally:
@@ -273,6 +285,7 @@ class SessionController:
                     self.session_config['status'] = 'completed'
                     self._save_session_metadata()
                     logger.info("Session status set to completed")
+                    self._emit_event("session_complete", self.get_session_status())
                 elif self.session_config['status'] == 'error':
                     logger.info("Session status is error, not changing to completed")
                 # Stop mount tracking if it was started by the session and session completed naturally
@@ -286,7 +299,15 @@ class SessionController:
                     except Exception as e:
                         logger.warning(f"Failed to stop mount tracking: {e}")
             logger.info("Session worker finished")
-    
+
+    def _emit_event(self, event_name: str, payload: Dict[str, Any]):
+        callback = getattr(self, "_event_callback", None)
+        if callable(callback):
+            try:
+                callback(event_name, payload)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning("Session event callback failed for %s: %s", event_name, exc)
+
     def _capture_session_image(self) -> bool:
         """Capture a single image for the session.
         

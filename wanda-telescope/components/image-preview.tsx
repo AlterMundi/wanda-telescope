@@ -1,4 +1,5 @@
 "use client"
+import Image from "next/image"
 import { Histogram } from "@/components/histogram"
 import { FocusAssist } from "@/components/focus-assist"
 
@@ -10,16 +11,17 @@ interface ImagePreviewProps {
 export function ImagePreview({ showHistogram, showFocusAssist }: ImagePreviewProps) {
   return (
     <div className="relative flex-1 bg-black">
-      {/* Main Image */}
       <div className="flex h-full items-center justify-center p-4">
-        <img
-          src="/purple-nebula-in-space-astrophotography.jpg"
+        <Image
+          src="/video_feed"
           alt="Telescope view"
+          width={1280}
+          height={720}
           className="max-h-full max-w-full rounded-lg object-contain"
+          unoptimized
         />
       </div>
 
-      {/* Overlays */}
       {showHistogram && (
         <div className="absolute right-4 top-4">
           <Histogram />
@@ -32,7 +34,6 @@ export function ImagePreview({ showHistogram, showFocusAssist }: ImagePreviewPro
         </div>
       )}
 
-      {/* Crosshair */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-8 w-8">
           <div className="absolute left-1/2 top-0 h-2 w-px -translate-x-1/2 bg-primary/50" />

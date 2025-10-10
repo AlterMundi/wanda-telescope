@@ -1,6 +1,6 @@
 """
 Web application for Wanda astrophotography system.
-Provides a REST API and MJPEG video feed for the Next.js frontend.
+Provides a REST API, MJPEG video feed, and Socket.IO for the Next.js frontend.
 """
 import logging
 import os
@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from flask import Flask, Response, request
 from flask_cors import CORS
+from flask_socketio import Namespace, SocketIO, emit
 
 import config
 from camera import CameraFactory  # noqa: F401 (retained for backward compatibility)
@@ -19,18 +20,57 @@ from .api_responses import error_response, success_response
 
 logger = logging.getLogger(__name__)
 
+socketio: Optional[SocketIO] = None
+
+
+class CameraNamespace(Namespace):
+    namespace = "/ws/camera"
+
+    def on_connect(self):  # type: ignore[override]
+        logger.debug("Client connected to camera namespace")
+        if self.server.camera_ref:
+            emit("status", build_camera_status_payload(self.server.camera_ref))
+
+    def on_disconnect(self):  # type: ignore[override]
+        logger.debug("Client disconnected from camera namespace")
+
+
+class MountNamespace(Namespace):
+    namespace = "/ws/mount"
+
+    def on_connect(self):  # type: ignore[override]
+        logger.debug("Client connected to mount namespace")
+        if self.server.mount_ref:
+            emit("status", build_mount_status_payload(self.server.mount_ref))
+
+    def on_disconnect(self):  # type: ignore[override]
+        logger.debug("Client disconnected from mount namespace")
+
+
+class SessionNamespace(Namespace):
+    namespace = "/ws/session"
+
+    def on_connect(self):  # type: ignore[override]
+        logger.debug("Client connected to session namespace")
+        if self.server.session_ref:
+            emit("status", self.server.session_ref.get_session_status())
+
+    def on_disconnect(self):  # type: ignore[override]
+        logger.debug("Client disconnected from session namespace")
+
 
 class WandaApp:
     """Flask application exposing REST endpoints for the Wanda system."""
 
     def __init__(self, camera=None, *, cors_origins: Optional[Sequence[str]] = None):
+        global socketio
         if camera is None:
             raise ValueError("Camera instance is required")
 
         self.camera = camera
         self.mount = MountController()
         self.session_controller = SessionController(
-            self.camera, self.mount, self.camera.capture_dir
+            self.camera, self.mount, self.camera.capture_dir, event_callback=self._handle_session_event
         )
 
         self.app = Flask(__name__)
@@ -38,25 +78,36 @@ class WandaApp:
         self._cors_origins = list(cors_origins) if cors_origins else ["http://localhost:3000"]
         CORS(self.app, origins=self._cors_origins)
 
-        @self.app.after_request
-        def _inject_default_cors_headers(response):  # type: ignore[override]
-            if self._cors_origins:
-                response.headers.setdefault("Access-Control-Allow-Origin", self._cors_origins[0])
-                response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
-                response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-            return response
+        socketio = SocketIO(
+            self.app,
+            cors_allowed_origins=self._cors_origins,
+            async_mode="eventlet",
+        )
+        socketio.camera_ref = self.camera  # type: ignore[attr-defined]
+        socketio.mount_ref = self.mount    # type: ignore[attr-defined]
+        socketio.session_ref = self.session_controller  # type: ignore[attr-defined]
+
+        socketio.on_namespace(CameraNamespace(CameraNamespace.namespace))
+        socketio.on_namespace(MountNamespace(MountNamespace.namespace))
+        socketio.on_namespace(SessionNamespace(SessionNamespace.namespace))
+
+        self.app.after_request(self._inject_default_cors_headers)  # type: ignore[arg-type]
 
         self._register_routes()
-        logger.info("REST web application initialized")
+        logger.info("REST web application initialized with Socket.IO")
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    def _inject_default_cors_headers(self, response):
+        if self._cors_origins:
+            response.headers.setdefault("Access-Control-Allow-Origin", self._cors_origins[0])
+            response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
+            response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        return response
+
     def run(self):
         """Run the web application."""
         try:
             logger.info("Starting web server on %s:%s", config.HOST, config.PORT)
-            self.app.run(host=config.HOST, port=config.PORT, threaded=True)
+            socketio.run(self.app, host=config.HOST, port=config.PORT)  # type: ignore[union-attr]
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error("Error in web server: %s", exc)
         finally:
@@ -98,19 +149,7 @@ class WandaApp:
     # ------------------------------------------------------------------
     def _camera_status(self):
         try:
-            data = {
-                "mode": getattr(self.camera, "mode", "still"),
-                "capture_status": getattr(self.camera, "capture_status", "Idle"),
-                "recording": getattr(self.camera, "recording", False),
-                "iso": self._safe_camera_call("gain_to_iso", self.camera.gain),
-                "gain": getattr(self.camera, "gain", 0.0),
-                "exposure_seconds": self._safe_camera_call("get_exposure_seconds", default=0.0),
-                "night_vision_mode": getattr(self.camera, "night_vision_mode", False),
-                "night_vision_intensity": getattr(self.camera, "night_vision_intensity", 0.0),
-                "save_raw": getattr(self.camera, "save_raw", False),
-                "skip_frames": getattr(self.camera, "skip_frames", 0),
-            }
-            return success_response(data, message="Camera status retrieved")
+            return success_response(build_camera_status_payload(self.camera), message="Camera status retrieved")
         except Exception as exc:
             logger.exception("Failed to retrieve camera status")
             return error_response(
@@ -176,6 +215,8 @@ class WandaApp:
 
             self.camera.update_camera_settings()
 
+            broadcast_camera_update(self.camera)
+
             return success_response(
                 {
                     "updates": updates_applied,
@@ -213,9 +254,11 @@ class WandaApp:
                 "capture_status": getattr(self.camera, "capture_status", "Completed"),
                 "recording": getattr(self.camera, "recording", False),
             }
+            broadcast_capture_event("capture_complete", data)
             return success_response(data, message="Capture complete")
         except Exception as exc:
             logger.exception("Capture still failed")
+            broadcast_capture_event("capture_error", {"error": str(exc)})
             return error_response(
                 code="CAPTURE_ERROR",
                 message=str(exc),
@@ -226,12 +269,7 @@ class WandaApp:
     # Mount handlers
     # ------------------------------------------------------------------
     def _mount_status(self):
-        data = {
-            "status": getattr(self.mount, "status", "Unknown"),
-            "tracking": getattr(self.mount, "tracking", False),
-            "direction": getattr(self.mount, "direction", True),
-            "speed": getattr(self.mount, "speed", 0.0),
-        }
+        data = build_mount_status_payload(self.mount)
         return success_response(data, message="Mount status retrieved")
 
     def _mount_tracking(self):
@@ -253,8 +291,10 @@ class WandaApp:
                         direction=self._normalize_direction(payload.get("direction")),
                     )
                 self.mount.start_tracking()
+                broadcast_mount_event("tracking_start", build_mount_status_payload(self.mount))
             else:
                 self.mount.stop_tracking()
+                broadcast_mount_event("tracking_stop", build_mount_status_payload(self.mount))
 
             return success_response(
                 {
@@ -265,6 +305,7 @@ class WandaApp:
             )
         except Exception as exc:
             logger.exception("Mount tracking action failed")
+            broadcast_mount_event("mount_error", {"error": str(exc)})
             return error_response(
                 code="MOUNT_ERROR",
                 message=str(exc),
@@ -450,3 +491,59 @@ class WandaApp:
             if lowered in {"ccw", "counterclockwise", "counter-clockwise"}:
                 return False
         return None
+
+    def _handle_session_event(self, event_name: str, payload: Dict[str, Any]):
+        if event_name == "session_progress":
+            broadcast_session_event("session_progress", payload)
+        elif event_name == "session_complete":
+            broadcast_session_event("session_complete", payload)
+        elif event_name == "session_error":
+            broadcast_session_event("session_error", payload)
+        elif event_name == "session_start":
+            broadcast_session_event("session_start", payload)
+        elif event_name == "session_stop":
+            broadcast_session_event("session_stop", payload)
+
+
+def build_camera_status_payload(camera) -> Dict[str, Any]:
+    return {
+        "mode": getattr(camera, "mode", "still"),
+        "capture_status": getattr(camera, "capture_status", "Idle"),
+        "recording": getattr(camera, "recording", False),
+        "iso": getattr(camera, "gain", 0.0) and camera.gain_to_iso(camera.gain),
+        "gain": getattr(camera, "gain", 0.0),
+        "exposure_seconds": getattr(camera, "get_exposure_seconds", lambda: 0.0)(),
+        "night_vision_mode": getattr(camera, "night_vision_mode", False),
+        "night_vision_intensity": getattr(camera, "night_vision_intensity", 0.0),
+        "save_raw": getattr(camera, "save_raw", False),
+        "skip_frames": getattr(camera, "skip_frames", 0),
+    }
+
+
+def build_mount_status_payload(mount) -> Dict[str, Any]:
+    return {
+        "status": getattr(mount, "status", "Unknown"),
+        "tracking": getattr(mount, "tracking", False),
+        "direction": getattr(mount, "direction", True),
+        "speed": getattr(mount, "speed", 0.0),
+    }
+
+
+def broadcast_camera_update(camera):
+    if socketio:
+        socketio.emit("status", build_camera_status_payload(camera), namespace="/ws/camera")
+
+
+def broadcast_capture_event(event: str, payload: Dict[str, Any]):
+    if socketio:
+        socketio.emit(event, payload, namespace="/ws/camera")
+
+
+def broadcast_mount_event(event: str, payload: Dict[str, Any]):
+    if socketio:
+        socketio.emit(event, payload, namespace="/ws/mount")
+
+
+def broadcast_session_event(event: str, payload: Dict[str, Any]):
+    if socketio:
+        socketio.emit(event, payload, namespace="/ws/session")
