@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ChevronDown } from "lucide-react"
 import {
+  ApiClientError,
   getCameraStatus,
   triggerCapture,
   updateCameraSettings,
@@ -39,19 +40,25 @@ export function CameraControls() {
   const [saveRaw, setSaveRaw] = useState(false)
   const [captureStatus, setCaptureStatus] = useState("Idle")
   const [isCapturing, setIsCapturing] = useState(false)
-  const { socket, isConnected } = useWebSocket("/ws/camera")
+  const { socket, isConnected, isReconnecting, connectionAttempts } = useWebSocket("/ws/camera")
+
+  const connectionLabel = useMemo(() => {
+    if (isConnected) return "Connected"
+    if (isReconnecting) return `Reconnecting (${connectionAttempts})`
+    return "Disconnected"
+  }, [connectionAttempts, isConnected, isReconnecting])
 
   const syncFromStatus = useCallback(async () => {
     try {
       const status = await getCameraStatus()
-      if (status.exposure_seconds) {
+      if (typeof status.exposure_seconds === "number") {
         setExposure([Number(status.exposure_seconds.toFixed(1))])
       }
-      if (status.iso) {
+      if (typeof status.iso === "number") {
         setIso([status.iso])
       }
       setNightVision(!!status.night_vision_mode)
-      setIntensity([status.night_vision_intensity ?? 1.0])
+      setIntensity([Number(status.night_vision_intensity ?? 1.0)])
       setSaveRaw(!!status.save_raw)
       setCaptureStatus(status.capture_status || "Idle")
     } catch (error) {
@@ -67,8 +74,8 @@ export function CameraControls() {
     if (!socket) return
 
     const handleStatus = (data: CameraStatusPayload) => {
-      if (data.exposure_seconds) setExposure([Number(data.exposure_seconds.toFixed(1))])
-      if (data.iso) setIso([data.iso])
+      if (typeof data.exposure_seconds === "number") setExposure([Number(data.exposure_seconds.toFixed(1))])
+      if (typeof data.iso === "number") setIso([data.iso])
       if (typeof data.night_vision_mode === "boolean") setNightVision(data.night_vision_mode)
       if (typeof data.night_vision_intensity === "number") setIntensity([data.night_vision_intensity])
       if (typeof data.save_raw === "boolean") setSaveRaw(data.save_raw)
@@ -154,8 +161,10 @@ export function CameraControls() {
       setCaptureStatus("Capturing...")
       await triggerCapture()
     } catch (error) {
+      const errorMessage =
+        error instanceof ApiClientError ? error.message : "Capture failed"
       console.error("Capture failed", error)
-      setCaptureStatus("Capture failed")
+      setCaptureStatus(errorMessage)
     } finally {
       if (!socket) {
         setIsCapturing(false)
@@ -167,7 +176,7 @@ export function CameraControls() {
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-md bg-muted/40 px-4 py-2 text-sm">
         <span>Status: {captureStatus}</span>
-        <span className="text-muted-foreground">WebSocket: {isConnected ? "Connected" : "Disconnected"}</span>
+        <span className="text-muted-foreground">WebSocket: {connectionLabel}</span>
       </div>
 
       <Button onClick={handleCapture} disabled={isCapturing} className="w-full">

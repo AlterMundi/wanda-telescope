@@ -1,56 +1,112 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Wifi, HardDrive, Thermometer } from "lucide-react"
+import { Camera, Wifi, HardDrive, Activity } from "lucide-react"
 import { useWebSocket } from "@/lib/hooks/useWebSocket"
+import type { CameraStatus } from "@/lib/api-client"
+
+interface MountStatusPayload {
+  status?: string
+  tracking?: boolean
+  direction?: boolean
+  speed?: number
+}
+
+interface SessionStatusPayload {
+  active?: boolean
+  name?: string
+  captured_images?: number
+  total_images?: number
+  remaining_time?: number
+}
 
 interface StatusState {
-  status: string
-  exposure_seconds?: number
-  iso?: number
+  camera: Partial<CameraStatus>
+  mount: MountStatusPayload
+  session: SessionStatusPayload
 }
 
-interface CameraStatusPayload {
-  capture_status?: string
-  exposure_seconds?: number
-  iso?: number
+const initialState: StatusState = {
+  camera: {
+    capture_status: "Idle",
+    exposure_seconds: undefined,
+    iso: undefined,
+  },
+  mount: {
+    status: "Idle",
+    tracking: false,
+  },
+  session: {
+    active: false,
+    captured_images: 0,
+    total_images: 0,
+  },
 }
 
-interface CaptureEventPayload {
-  capture_status?: string
-  error?: string
+function formatSession(session: SessionStatusPayload) {
+  if (!session.active) {
+    return "No active session"
+  }
+
+  const progress = session.total_images
+    ? `${session.captured_images ?? 0}/${session.total_images}`
+    : `${session.captured_images ?? 0}`
+
+  return `${session.name || "Session"} • ${progress}`
 }
 
 export function StatusBar() {
-  const [cameraStatus, setCameraStatus] = useState<StatusState>({ status: "Ready" })
-  const [isCapturing, setIsCapturing] = useState(false)
-  const { socket, isConnected } = useWebSocket("/ws/camera")
+  const [status, setStatus] = useState(initialState)
+  const cameraSocket = useWebSocket("/ws/camera")
+  const mountSocket = useWebSocket("/ws/mount")
+  const sessionSocket = useWebSocket("/ws/session")
 
   useEffect(() => {
+    const { socket } = cameraSocket
     if (!socket) return
 
-    const handleStatus = (payload: CameraStatusPayload) => {
-      setCameraStatus({
-        status: payload.capture_status || "Ready",
-        exposure_seconds: payload.exposure_seconds,
-        iso: payload.iso,
-      })
+    const handleStatus = (payload: Partial<CameraStatus>) => {
+      setStatus((prev) => ({
+        ...prev,
+        camera: {
+          ...prev.camera,
+          ...payload,
+        },
+      }))
     }
 
     const handleCaptureStart = () => {
-      setIsCapturing(true)
-      setCameraStatus((prev) => ({ ...prev, status: "Capturing" }))
+      setStatus((prev) => ({
+        ...prev,
+        camera: {
+          ...prev.camera,
+          capture_status: "Capturing",
+          recording: true,
+        },
+      }))
     }
 
-    const handleCaptureComplete = (payload: CaptureEventPayload) => {
-      setIsCapturing(false)
-      setCameraStatus((prev) => ({ ...prev, status: payload.capture_status || "Completed" }))
+    const handleCaptureComplete = (payload: { capture_status?: string }) => {
+      setStatus((prev) => ({
+        ...prev,
+        camera: {
+          ...prev.camera,
+          capture_status: payload.capture_status || "Completed",
+          recording: false,
+        },
+      }))
     }
 
-    const handleCaptureError = (payload: CaptureEventPayload) => {
-      setIsCapturing(false)
-      setCameraStatus({ status: `Error: ${payload.error ?? "unknown"}` })
+    const handleCaptureError = (payload: { error?: string }) => {
+      setStatus((prev) => ({
+        ...prev,
+        camera: {
+          ...prev.camera,
+          capture_status: `Error: ${payload.error ?? "Unknown"}`,
+          recording: false,
+        },
+      }))
     }
 
     socket.on("status", handleStatus)
@@ -64,32 +120,122 @@ export function StatusBar() {
       socket.off("capture_complete", handleCaptureComplete)
       socket.off("capture_error", handleCaptureError)
     }
-  }, [socket])
+  }, [cameraSocket.socket])
+
+  useEffect(() => {
+    const { socket } = mountSocket
+    if (!socket) return
+
+    const handleMountUpdate = (payload: MountStatusPayload) => {
+      setStatus((prev) => ({
+        ...prev,
+        mount: {
+          ...prev.mount,
+          ...payload,
+        },
+      }))
+    }
+
+    socket.on("status", handleMountUpdate)
+    socket.on("tracking_start", handleMountUpdate)
+    socket.on("tracking_stop", handleMountUpdate)
+    socket.on("mount_error", handleMountUpdate)
+
+    return () => {
+      socket.off("status", handleMountUpdate)
+      socket.off("tracking_start", handleMountUpdate)
+      socket.off("tracking_stop", handleMountUpdate)
+      socket.off("mount_error", handleMountUpdate)
+    }
+  }, [mountSocket.socket])
+
+  useEffect(() => {
+    const { socket } = sessionSocket
+    if (!socket) return
+
+    const handleSessionUpdate = (payload: SessionStatusPayload) => {
+      setStatus((prev) => ({
+        ...prev,
+        session: {
+          ...prev.session,
+          ...payload,
+        },
+      }))
+    }
+
+    socket.on("status", handleSessionUpdate)
+    socket.on("session_start", () => handleSessionUpdate({ active: true }))
+    socket.on("session_progress", handleSessionUpdate)
+    socket.on("session_complete", () => handleSessionUpdate({ active: false }))
+    socket.on("session_error", handleSessionUpdate)
+
+    return () => {
+      socket.off("status", handleSessionUpdate)
+      socket.off("session_start", handleSessionUpdate)
+      socket.off("session_progress", handleSessionUpdate)
+      socket.off("session_complete", handleSessionUpdate)
+      socket.off("session_error", handleSessionUpdate)
+    }
+  }, [sessionSocket.socket])
+
+  const cameraConnectionLabel = useMemo(() => {
+    if (cameraSocket.isConnected) return "Connected"
+    if (cameraSocket.isReconnecting) return "Reconnecting"
+    return "Offline"
+  }, [cameraSocket.isConnected, cameraSocket.isReconnecting])
+
+  const mountConnectionLabel = useMemo(() => {
+    if (mountSocket.isConnected) {
+      return status.mount.tracking ? "Tracking" : "Idle"
+    }
+    if (mountSocket.isReconnecting) return "Reconnecting"
+    return "Offline"
+  }, [mountSocket.isConnected, mountSocket.isReconnecting, status.mount.tracking])
+
+  const sessionConnectionLabel = useMemo(() => {
+    if (sessionSocket.isConnected) return status.session.active ? "Running" : "Monitoring"
+    if (sessionSocket.isReconnecting) return "Reconnecting"
+    return "Offline"
+  }, [sessionSocket.isConnected, sessionSocket.isReconnecting, status.session.active])
 
   return (
-    <footer className="flex items-center justify-between border-t border-border bg-card px-6 py-2 text-xs">
-      <div className="flex items-center gap-4">
+    <footer className="flex flex-col border-t border-border bg-card/80 px-6 py-2 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-1 flex-wrap gap-x-6 gap-y-2">
         <div className="flex items-center gap-2">
-          <Wifi className={`h-3 w-3 ${isConnected ? "text-green-500" : "text-muted-foreground"}`} />
-          <span className="text-muted-foreground">{isConnected ? "Socket Connected" : "Socket Offline"}</span>
+          <Wifi className={`h-3 w-3 ${cameraSocket.isConnected ? "text-green-500" : "text-muted-foreground"}`} />
+          <span>Camera: {cameraConnectionLabel}</span>
+          <Badge variant="outline" className="ml-2">
+            {status.camera.capture_status}
+          </Badge>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Camera className="h-3 w-3 text-muted-foreground" />
+          <span>
+            Exp: {typeof status.camera.exposure_seconds === "number" ? status.camera.exposure_seconds.toFixed(1) : "-"}s
+          </span>
+          <span>ISO: {typeof status.camera.iso === "number" ? status.camera.iso : "-"}</span>
+        </div>
+
         <div className="flex items-center gap-2">
           <HardDrive className="h-3 w-3 text-muted-foreground" />
-          <span className="text-muted-foreground">Exposure: {cameraStatus.exposure_seconds ?? "-"}s</span>
+          <span>Mount: {mountConnectionLabel}</span>
+          {status.mount.tracking && <Badge variant="secondary">Tracking</Badge>}
         </div>
+
         <div className="flex items-center gap-2">
-          <Thermometer className="h-3 w-3 text-muted-foreground" />
-          <span className="text-muted-foreground">ISO: {cameraStatus.iso ?? "-"}</span>
+          <Activity className="h-3 w-3 text-muted-foreground" />
+          <span>{formatSession(status.session)}</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        {isCapturing && (
+      <div className="mt-2 flex items-center gap-3 md:mt-0">
+        <span>Session: {sessionConnectionLabel}</span>
+        {status.camera.recording && (
           <Badge variant="default" className="animate-pulse">
             Recording
           </Badge>
         )}
-        <span className="text-muted-foreground">Camera Status: {cameraStatus.status}</span>
       </div>
     </footer>
   )

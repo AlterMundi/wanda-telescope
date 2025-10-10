@@ -5,6 +5,8 @@ import { CameraControls } from "@/components/camera-controls"
 import { CapturePanel } from "@/components/capture-panel"
 import { ImagePreview } from "@/components/image-preview"
 import { StatusBar } from "@/components/status-bar"
+import { MountControls } from "@/components/mount-controls"
+import { SessionControls } from "@/components/session-controls"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function HomePage() {
@@ -42,11 +44,11 @@ export default function HomePage() {
                 <TabsContent value="camera" className="p-6">
                   <CameraControls />
                 </TabsContent>
-                <TabsContent value="mount" className="p-6 text-sm text-muted-foreground">
-                  Placeholder mount controls (to be implemented)
+                <TabsContent value="mount" className="p-6">
+                  <MountControls />
                 </TabsContent>
-                <TabsContent value="session" className="p-6 text-sm text-muted-foreground">
-                  Placeholder session controls (to be implemented)
+                <TabsContent value="session" className="p-6">
+                  <SessionControls />
                 </TabsContent>
               </Tabs>
             </div>
