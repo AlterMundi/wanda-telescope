@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wanda Frontend (Next.js)
 
-## Getting Started
+This folder hosts the React UI for WANDA, backed by the Flask API that lives in the repository root.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 20+
+- Python backend (`python main.py`) running from the project root
+
+## Environment Variables
+
+Copy the sample file that matches your scenario:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp env.local.sample .env.local         # development
+cp env.production.sample .env.production   # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | Description |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | Base URL for REST requests (defaults to `/api`) |
+| `NEXT_PUBLIC_WS_URL` | Base URL for Socket.IO (empty means same origin) |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development Workflow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Start Flask in one terminal, Next.js in another:
 
-## Learn More
+```bash
+# Terminal 1
+cd ..
+source venv/bin/activate
+python main.py
 
-To learn more about Next.js, take a look at the following resources:
+# Terminal 2
+npm install
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js rewrites in `next.config.mjs` forward `/api/*`, `/video_feed`, and `/socket.io/*` to the Flask server.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Testing
 
-## Deploy on Vercel
+```bash
+npm test
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Uses Vitest and Testing Library to cover the UI components.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Production Build
+
+```bash
+npm run build
+npm start
+```
+
+See `NEXTJS_INTEGRATION_PLAN.md` in the repository root for systemd + Nginx configuration guidance.
+

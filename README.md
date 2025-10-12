@@ -10,7 +10,7 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astropho
 
 - **Multi-Camera Support**: Automatic detection and support for Pi Camera, USB cameras, and mock cameras
 - **Automated Star Tracking**: Equatorial mount control with configurable tracking speeds
-- **Modern Web Interface**: Responsive Flask-based REST API with AJAX frontend
+- **Modern Web Interface**: Next.js (React) frontend consuming the Flask REST API with real-time updates
 - **Advanced Camera Control**: Exposure, ISO, gain adjustment, and night vision mode
 - **Session Management**: Automated capture sessions with progress tracking and metadata export
 - **Auto-Startup**: Systemd service for automatic startup on boot
@@ -117,51 +117,52 @@ python main.py
 - Thread-based implementation for non-blocking operation
 - JSON metadata export for each session
 
-#### Web Interface (`web/`)
-- Flask-based REST API with AJAX frontend
+#### Web Interface (`web/` + Next.js)
+- Flask-based REST API consumed by the Next.js frontend
 - Real-time camera feed via MJPEG streaming
-- Responsive design with collapsible control panels
-- Modern UI with intuitive controls
+- React components powered by WebSockets for live updates
+- Extensive documentation in the "Web Interface (Next.js Frontend)" section above
 
-## Usage
+### Web Interface (Next.js Frontend)
 
-### Web Interface
+The modern UI now runs as a standalone Next.js application located in `wanda-telescope/`.
 
-Access WANDA through any web browser on your network:
-- **Local access**: `http://localhost:5000`
-- **Network access**: `http://[PI_IP]:5000`
+#### Development Workflow
 
-#### Camera Controls
-- **Live Preview**: Real-time camera feed with MJPEG streaming
-- **Exposure Settings**: 1/10000s to 200s with fine control
-- **ISO Adjustment**: 20-1600 range for optimal light sensitivity
-- **Night Vision Mode**: Enhanced sensitivity for low-light conditions
-- **RAW Capture**: Option to save RAW files for post-processing
-- **Performance Tuning**: CPU usage optimization
+1. **Start the Flask backend**
+   ```bash
+   cd /home/admin/wanda-telescope
+   source venv/bin/activate
+   python main.py  # starts Flask + Socket.IO on port 5000
+   ```
 
-#### Mount Controls
-- **Tracking Speed**: Configurable for different celestial objects
-- **Direction Control**: Clockwise/counterclockwise movement
-- **Start/Stop Tracking**: Manual control of mount operation
+2. **Start the Next.js frontend** (in a second terminal)
+   ```bash
+   cd /home/admin/wanda-telescope/wanda-telescope
+   npm install  # first run only
+   npm run dev -- --port 3000
+   ```
 
-#### Session Management
-- **Automated Captures**: Set up timed capture sessions
-- **Progress Tracking**: Real-time session status and completion
-- **Metadata Export**: JSON files with capture information
+3. **Access the UI**: `http://localhost:3000`
+   - API requests are proxied to Flask at `http://localhost:5000`
+   - MJPEG feed available at `/video_feed`
+   - WebSockets automatically connect to `/ws/*`
 
-### Taking Photos
+#### Production Notes
 
-1. **Configure camera settings** using the Camera panel
-2. **Start mount tracking** if following celestial objects
-3. **Click "Capture Photo"** - interface shows progress
-4. **Files are saved** with automatic storage management
+- Frontend build: `npm run build` → served via `npm start`
+- Backend service: `python main.py` (typically managed via systemd)
+- Reverse proxy (e.g., Nginx) should forward `/api`, `/socket.io`, and `/video_feed` to Flask, everything else to Next.js
+- Environment variables:
+  - `NEXT_PUBLIC_API_URL` defaults to `/api`
+  - `NEXT_PUBLIC_WS_URL` defaults to `/socket.io`
 
-### Recording Videos
+#### Feature Highlights
 
-1. **Set up recording parameters** in camera controls
-2. **Click "Start Video"** to begin recording
-3. **Click "Stop Video"** when finished
-4. **Videos are saved** as H.264 files
+- **Camera Controls**: Live status via REST + WebSockets, MJPEG preview, exposure/ISO management
+- **Mount Controls**: Start/stop tracking, speed/direction adjustments
+- **Session Automation**: Start/stop capture sessions with progress feedback
+- **Capture Gallery**: Auto-refreshing list of recent images from `/api/captures`
 
 ## Storage Management
 
@@ -202,8 +203,11 @@ pip install -r requirements.txt
 # Install development dependencies
 pip install pytest pytest-cov
 
-# Run WANDA in development mode
+# Run Flask backend
 python main.py
+
+# (optional) start Next.js frontend in another terminal
+# cd wanda-telescope && npm run dev
 ```
 
 ## File Structure
@@ -235,30 +239,16 @@ wanda-telescope/
 ├── session/                   # Session management
 │   ├── __init__.py           # Session package initialization
 │   └── controller.py         # Session controller
-├── web/                       # Web interface
-│   ├── __init__.py           # Web package initialization
-│   ├── app.py                # Flask application
-│   ├── templates/            # HTML templates
-│   │   ├── base.html         # Base template
-│   │   ├── index.html        # Main page
-│   │   └── components/       # Reusable components
-│   │       ├── camera-controls.html
-│   │       ├── mount-controls.html
-│   │       └── session-controls.html
-│   └── static/               # Static assets
-│       ├── css/              # Stylesheets
-│       │   ├── main.css
-│       │   ├── components.css
-│       │   └── modern-ui.css
-│       ├── js/               # JavaScript files
-│       │   ├── ajax-utils.js
-│       │   ├── camera-controls.js
-│       │   ├── modern-ui.js
-│       │   ├── mount-controls.js
-│       │   ├── session-controls.js
-│       │   └── utils.js
-│       └── img/              # Images
-│           └── favicon.ico
+├── web/                       # Flask REST API + WebSockets
+│   ├── __init__.py
+│   └── app.py
+├── wanda-telescope/           # Next.js frontend application
+│   ├── app/                  # App Router (layout, pages)
+│   ├── components/           # React components + UI system
+│   ├── lib/                  # Frontend utilities (API client, hooks)
+│   ├── public/               # Static assets served by Next.js
+│   ├── package.json          # Frontend dependencies
+│   └── (see `next.config.mjs`, `tailwind.config.ts`, etc.)
 ├── utils/                     # Utility functions
 │   ├── __init__.py           # Utils package initialization
 │   └── storage.py            # Storage management

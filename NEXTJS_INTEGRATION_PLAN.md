@@ -384,7 +384,7 @@ useEffect(() => {
 ```
 
 #### 3.5 - Create environment configuration
-**File:** `wanda-telescope/.env.local`
+**File:** `wanda-telescope/env.local.sample`
 
 ```bash
 # Development
@@ -396,7 +396,7 @@ NEXT_PUBLIC_WS_URL=http://localhost:5000
 # NEXT_PUBLIC_WS_URL=
 ```
 
-**File:** `wanda-telescope/.env.production`
+**File:** `wanda-telescope/env.production.sample`
 
 ```bash
 # Production on Pi (through Nginx)
