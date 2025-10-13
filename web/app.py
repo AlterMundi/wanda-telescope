@@ -2,6 +2,8 @@
 Web application for Wanda astrophotography system.
 Provides a REST API, MJPEG video feed, and Socket.IO for the Next.js frontend.
 """
+import concurrent.futures
+import eventlet
 import logging
 import os
 import time
@@ -26,9 +28,9 @@ socketio: Optional[SocketIO] = None
 class CameraNamespace(Namespace):
     namespace = "/ws/camera"
 
-    def on_connect(self):  # type: ignore[override]
+    def on_connect(self, auth=None, environ=None):  # type: ignore[override]
         logger.debug("Client connected to camera namespace")
-        if self.server.camera_ref:
+        if hasattr(self.server, 'camera_ref') and self.server.camera_ref:
             emit("status", build_camera_status_payload(self.server.camera_ref))
 
     def on_disconnect(self):  # type: ignore[override]
@@ -38,9 +40,9 @@ class CameraNamespace(Namespace):
 class MountNamespace(Namespace):
     namespace = "/ws/mount"
 
-    def on_connect(self):  # type: ignore[override]
+    def on_connect(self, auth=None, environ=None):  # type: ignore[override]
         logger.debug("Client connected to mount namespace")
-        if self.server.mount_ref:
+        if hasattr(self.server, 'mount_ref') and self.server.mount_ref:
             emit("status", build_mount_status_payload(self.server.mount_ref))
 
     def on_disconnect(self):  # type: ignore[override]
@@ -50,9 +52,9 @@ class MountNamespace(Namespace):
 class SessionNamespace(Namespace):
     namespace = "/ws/session"
 
-    def on_connect(self):  # type: ignore[override]
+    def on_connect(self, auth=None, environ=None):  # type: ignore[override]
         logger.debug("Client connected to session namespace")
-        if self.server.session_ref:
+        if hasattr(self.server, 'session_ref') and self.server.session_ref:
             emit("status", self.server.session_ref.get_session_status())
 
     def on_disconnect(self):  # type: ignore[override]
@@ -72,6 +74,8 @@ class WandaApp:
         self.session_controller = SessionController(
             self.camera, self.mount, self.camera.capture_dir, event_callback=self._handle_session_event
         )
+        # Thread pool for blocking camera operations
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
         self.app = Flask(__name__)
 
@@ -241,7 +245,12 @@ class WandaApp:
 
     def _capture_still(self):
         try:
-            success = self.camera.capture_still()
+            # Run blocking camera capture in thread pool to avoid blocking eventlet
+            # Timeout based on exposure time + 30 second buffer
+            exposure = getattr(self.camera, "exposure_seconds", 1.0)
+            timeout = max(exposure + 30, 60)  # At least 60 seconds
+            future = self._executor.submit(self.camera.capture_still)
+            success = future.result(timeout=timeout)
 
             if not success:
                 return error_response(

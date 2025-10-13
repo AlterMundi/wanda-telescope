@@ -2,6 +2,11 @@
 Main entry point for Wanda astrophotography system.
 Initializes all components and starts the web server.
 """
+# CRITICAL: Eventlet monkey patching MUST be done before any other imports
+# Use selective patching to avoid breaking picamera2's threading/subprocess
+import eventlet
+eventlet.monkey_patch(socket=True, select=True, time=True, os=False, thread=False, subprocess=False)
+
 import logging
 import sys
 import signal
@@ -115,7 +120,8 @@ def main():
         print("Please fix the camera issue and restart the application.")
         sys.exit(1)
 
-    app = WandaApp(camera=camera)
+    # Use wildcard CORS since Nginx proxies all requests from port 80
+    app = WandaApp(camera=camera, cors_origins=["*"])
     try:
         app.run()
     except Exception as e:
