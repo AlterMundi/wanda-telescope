@@ -44,7 +44,7 @@ class SessionController:
         self.session_thread = None
         self.session_running = False
         self._shutdown = False
-        self._session_lock = threading.Lock()  # Add lock to prevent race conditions
+        self._session_lock = threading.RLock()  # Reentrant lock for nested access
         self._event_callback = event_callback
         
         # Session configuration
@@ -249,23 +249,46 @@ class SessionController:
                     if self.session_config['images_captured'] >= self.session_config['total_images']:
                         logger.info("Session completed - all images captured")
                         break
-                
-                # Capture image
-                if self._capture_session_image():
+
+                try:
+                    captured = self._capture_session_image()
+                except Exception as capture_exc:
+                    logger.error(f"Session worker error: {capture_exc}")
                     with self._session_lock:
-                        self.session_config['images_captured'] += 1
+                        self.session_config['status'] = 'error'
                         self._save_session_metadata()
-                        
-                        safe_log('info', f"Captured image {self.session_config['images_captured']}/"
-                                  f"{self.session_config['total_images']}")
-                        self._emit_event("session_progress", self.get_session_status())
-                
+                        logger.error(
+                            "Session status set to error in except block: %s",
+                            self.session_config['status'],
+                        )
+                        self._emit_event(
+                            "session_error",
+                            {"error": str(capture_exc), "status": self.get_session_status()},
+                        )
+                    raise
+                else:
+                    if captured:
+                        with self._session_lock:
+                            self.session_config['images_captured'] += 1
+                            self._save_session_metadata()
+
+                            safe_log(
+                                'info',
+                                f"Captured image {self.session_config['images_captured']}/"
+                                f"{self.session_config['total_images']}"
+                            )
+                            self._emit_event("session_progress", self.get_session_status())
+
                 # Calculate delay between captures
                 with self._session_lock:
-                    if (self.session_running and
-                        self.session_config['images_captured'] < self.session_config['total_images']):
-                        delay = self._calculate_capture_delay()
-                        time.sleep(delay)
+                    need_delay = (
+                        self.session_running
+                        and self.session_config['images_captured'] < self.session_config['total_images']
+                    )
+                    delay = self._calculate_capture_delay() if need_delay else 0
+
+                if need_delay and delay:
+                    time.sleep(delay)
         
         except Exception as e:
             logger.error(f"Session worker error: {e}")
@@ -288,6 +311,7 @@ class SessionController:
                     self._emit_event("session_complete", self.get_session_status())
                 elif self.session_config['status'] == 'error':
                     logger.info("Session status is error, not changing to completed")
+                    self._emit_event("session_error", self.get_session_status())
                 # Stop mount tracking if it was started by the session and session completed naturally
                 if (self.session_config.get('enable_tracking', False) and 
                     self.mount.tracking and 

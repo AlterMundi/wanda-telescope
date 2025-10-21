@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { CameraControls } from "@/components/camera-controls"
+import { getCameraStatus, updateCameraSettings, triggerCapture } from "@/lib/api-client"
 
 vi.mock("@/lib/api-client", () => ({
   getCameraStatus: vi.fn(),
@@ -23,17 +24,18 @@ vi.mock("@/lib/hooks/useWebSocket", () => ({
 }))
 
 describe("CameraControls", () => {
-  const { getCameraStatus, updateCameraSettings, triggerCapture } = require("@/lib/api-client")
-
   beforeEach(() => {
     vi.clearAllMocks()
-    getCameraStatus.mockResolvedValue({
+    vi.mocked(getCameraStatus).mockResolvedValue({
+      mode: "photo",
       capture_status: "Idle",
       exposure_seconds: 1.2,
       iso: 800,
+      gain: 1.0,
       night_vision_mode: false,
       night_vision_intensity: 5,
       save_raw: false,
+      skip_frames: 0,
       recording: false,
     })
   })
@@ -53,7 +55,7 @@ describe("CameraControls", () => {
     fireEvent.change(exposureInput, { target: { value: "2.5" } })
 
     await waitFor(() => {
-      expect(updateCameraSettings).toHaveBeenCalledWith({ exposure_seconds: 2.5 })
+      expect(vi.mocked(updateCameraSettings)).toHaveBeenCalledWith({ exposure_seconds: 2.5 })
     })
   })
 
@@ -64,7 +66,7 @@ describe("CameraControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /Capture Image/i }))
 
     await waitFor(() => {
-      expect(triggerCapture).toHaveBeenCalled()
+      expect(vi.mocked(triggerCapture)).toHaveBeenCalled()
     })
   })
 })

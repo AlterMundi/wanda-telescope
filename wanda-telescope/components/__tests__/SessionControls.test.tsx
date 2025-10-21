@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { SessionControls } from "@/components/session-controls"
+import { getSessionStatus, startSession, stopSession } from "@/lib/api-client"
 
 vi.mock("@/lib/api-client", () => ({
   getSessionStatus: vi.fn(),
@@ -23,11 +24,9 @@ vi.mock("@/lib/hooks/useWebSocket", () => ({
 }))
 
 describe("SessionControls", () => {
-  const { getSessionStatus, startSession, stopSession } = require("@/lib/api-client")
-
   beforeEach(() => {
     vi.clearAllMocks()
-    getSessionStatus.mockResolvedValue({
+    vi.mocked(getSessionStatus).mockResolvedValue({
       active: false,
       name: "Night Session",
       total_images: 10,
@@ -55,7 +54,7 @@ describe("SessionControls", () => {
   })
 
   it("stops a session", async () => {
-    getSessionStatus.mockResolvedValueOnce({
+    vi.mocked(getSessionStatus).mockResolvedValueOnce({
       active: true,
       name: "Active Session",
       total_images: 5,

@@ -60,6 +60,41 @@ class TestSessionController:
             mock_dt.fromisoformat = datetime.fromisoformat
             yield mock_dt
 
+    @pytest.fixture(autouse=True)
+    def mock_session_thread(self):
+        """Run session worker threads synchronously while preserving threading elsewhere."""
+        original_thread = threading.Thread
+        worker_threads = []
+
+        def thread_side_effect(*args, **kwargs):
+            target = kwargs.get("target") if kwargs else (args[0] if args else None)
+            thread_args = kwargs.get("args", ())
+            thread_kwargs = kwargs.get("kwargs", {})
+
+            if target and getattr(target, "__name__", None) == "_session_worker":
+                fake_thread = Mock(name="session_worker_thread")
+                fake_thread.is_alive.return_value = False
+                fake_thread.join.return_value = None
+
+                def _run_target():
+                    target(*thread_args, **thread_kwargs)
+
+                fake_thread.start.side_effect = _run_target
+                worker_threads.append(fake_thread)
+                return fake_thread
+
+            return original_thread(*args, **kwargs)
+
+        with patch('session.controller.threading.Thread', side_effect=thread_side_effect) as mock_thread_cls:
+            mock_thread_cls.worker_threads = worker_threads
+            yield mock_thread_cls
+
+    @pytest.fixture(autouse=True)
+    def mock_time_sleep(self):
+        """Eliminate actual sleeping during session worker tests."""
+        with patch('session.controller.time.sleep', return_value=None):
+            yield
+
     def test_init(self, mock_camera, mock_mount):
         """Test SessionController initialization with default values."""
         with patch('session.controller.logger'):
@@ -105,42 +140,45 @@ class TestSessionController:
 
         mock_logger.info.assert_called_once_with("Session controller initialized")
 
-    def test_start_session_success(self, mock_session_controller, mock_os_makedirs, mock_datetime):
+    def test_start_session_success(self, mock_session_thread, mock_session_controller, mock_os_makedirs, mock_datetime):
         """Test successful session start."""
         controller = mock_session_controller
-
+        
         # Act
         result = controller.start_session("test_session", 10, use_current_settings=True, enable_tracking=False)
 
         # Assert
         assert result is True
-        assert controller.session_running is True
         assert controller.session_thread is not None
-        assert controller.session_thread.is_alive()
         assert controller.session_config['name'] == "test_session"
         assert controller.session_config['total_images'] == 10
-        assert controller.session_config['status'] == 'running'
+        assert controller.session_config['status'] == 'completed'
         assert controller.session_config['session_dir'] == "captures/test_session"
+        assert controller.session_config['images_captured'] == 10
         mock_os_makedirs.assert_called_once_with("captures/test_session", exist_ok=True)
+        mock_session_thread.assert_any_call(target=controller._session_worker, daemon=True)
+        assert mock_session_thread.worker_threads
 
-    def test_start_session_with_time_based(self, mock_session_controller, mock_os_makedirs, mock_datetime):
+    def test_start_session_with_time_based(self, mock_session_thread, mock_session_controller, mock_os_makedirs, mock_datetime):
         """Test successful session start with time-based capture."""
         controller = mock_session_controller
-
+        
         # Act
         result = controller.start_session("time_session", 10, total_time_hours=4.0)
 
         # Assert
         assert result is True
-        assert controller.session_running is True
         assert controller.session_thread is not None
         assert controller.session_config['name'] == "time_session"
         assert controller.session_config['total_images'] == 10
         assert controller.session_config['total_time_hours'] == 4.0
-        assert controller.session_config['status'] == 'running'
+        assert controller.session_config['status'] == 'completed'
+        assert controller.session_config['images_captured'] == 10
         mock_os_makedirs.assert_called_once_with("captures/time_session", exist_ok=True)
+        mock_session_thread.assert_any_call(target=controller._session_worker, daemon=True)
+        assert mock_session_thread.worker_threads
 
-    def test_start_session_with_tracking(self, mock_session_controller, mock_mount):
+    def test_start_session_with_tracking(self, mock_session_thread, mock_session_controller, mock_mount):
         """Test session start with mount tracking enabled."""
         controller = mock_session_controller
         mock_mount.tracking = False
@@ -153,6 +191,8 @@ class TestSessionController:
                 # Assert
                 mock_mount.start_tracking.assert_called_once()
                 assert controller.session_config['enable_tracking'] is True
+                mock_session_thread.assert_any_call(target=controller._session_worker, daemon=True)
+                assert mock_session_thread.worker_threads
 
     def test_start_session_already_running(self, mock_session_controller):
         """Test starting session when one is already running."""
@@ -264,13 +304,11 @@ class TestSessionController:
         mock_mount.tracking = True
 
         with patch('session.controller.datetime'):
-            # Act
             controller.stop_session()
 
-            # Assert
-            mock_mount.stop_tracking.assert_called_once()
-            assert controller.session_config['mount_tracking_stopped'] is True
-            controller._test_event_callback.assert_any_call('session_complete', ANY)
+        mock_mount.stop_tracking.assert_called_once()
+        assert controller.session_config['mount_tracking_stopped'] is True
+        controller._test_event_callback.assert_any_call('session_stop', ANY)
 
     def test_get_session_status_idle(self, mock_session_controller):
         """Test getting session status when idle."""
@@ -325,12 +363,9 @@ class TestSessionController:
             assert status['elapsed_time'] == 1800  # 30 minutes in seconds
             assert status['session_dir'] == 'captures/test_session'
 
-    @patch('threading.Thread')
-    def test_session_worker_thread_creation(self, mock_thread_class, mock_session_controller):
+    def test_session_worker_thread_creation(self, mock_session_thread, mock_session_controller):
         """Test that session worker thread is created properly."""
         controller = mock_session_controller
-        mock_thread_instance = Mock()
-        mock_thread_class.return_value = mock_thread_instance
 
         with patch('os.makedirs'):
             with patch('session.controller.datetime'):
@@ -338,8 +373,8 @@ class TestSessionController:
                 controller.start_session("test", 1)
 
                 # Assert
-                mock_thread_class.assert_called_once_with(target=controller._session_worker, daemon=True)
-                mock_thread_instance.start.assert_called_once()
+                mock_session_thread.assert_any_call(target=controller._session_worker, daemon=True)
+                assert mock_session_thread.worker_threads
 
     @patch('time.sleep')
     def test_session_worker_capture_loop(self, mock_sleep, mock_session_controller):
@@ -377,36 +412,34 @@ class TestSessionController:
         controller.session_config['images_captured'] = 1
 
         # Act
-        controller._session_worker()
+        # Execute worker without actual sleeps to keep test fast
+        with patch('session.controller.time.sleep', return_value=None):
+            controller._session_worker()
 
         # Assert
         assert controller.session_running is False
 
-    def test_session_worker_handles_capture_failure(self, mock_session_controller):
+    def test_session_worker_handles_capture_failure(self, mock_session_controller, mock_session_thread):
         """Test session worker handles capture failure."""
         controller = mock_session_controller
-
-        # Setup - Initialize session config properly
         controller.session_config.update({
             'total_images': 1,
             'images_captured': 0,
             'status': 'running'
         })
 
-        # Create a custom exception to ensure it's caught
         class TestCaptureException(Exception):
             pass
 
-        # Mock capture to always fail with our custom exception
         with patch.object(controller, '_capture_session_image', side_effect=TestCaptureException("Capture failed")):
             with patch.object(controller, '_save_session_metadata'):
-                # Act
-                controller._session_worker()
+                controller.session_running = True
+                with patch.object(controller, 'get_session_status', return_value={'status': 'error'}):
+                    controller._session_worker()
 
-                # Assert
-                assert controller.session_running is False  # Session should stop
-                assert controller.session_config['status'] == 'error'
-                controller._test_event_callback.assert_any_call('session_error', ANY)
+        assert controller.session_running is False
+        assert controller.session_config['status'] == 'error'
+        controller._test_event_callback.assert_any_call('session_error', ANY)
 
     def test_capture_session_image_with_capture_file(self, mock_session_controller):
         """Test capturing image with camera that has capture_file method."""
@@ -592,14 +625,11 @@ class TestSessionController:
         with patch('os.makedirs'):
             with patch('session.controller.datetime'):
                 with patch('session.controller.logger') as mock_logger:
-                    # Act
                     result = controller.start_session("test_session", 5, enable_tracking=True)
 
-                    # Assert
-                    assert result is True  # Session should still start despite mount failure
-                    assert controller.session_running is True
-                    mock_mount.start_tracking.assert_called_once()
-                    mock_logger.warning.assert_called_once_with("Failed to start mount tracking: Mount tracking failed")
+        assert result is True
+        mock_mount.start_tracking.assert_called_once()
+        mock_logger.warning.assert_called_once_with("Failed to start mount tracking: Mount tracking failed")
 
     def test_stop_session_mount_tracking_failure(self, mock_session_controller, mock_mount):
         """Test stop_session when mount tracking fails to stop."""

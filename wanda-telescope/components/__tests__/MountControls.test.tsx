@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { MountControls } from "@/components/mount-controls"
+import { getMountStatus, sendMountAction } from "@/lib/api-client"
 
 vi.mock("@/lib/api-client", () => ({
   getMountStatus: vi.fn(),
@@ -22,11 +23,9 @@ vi.mock("@/lib/hooks/useWebSocket", () => ({
 }))
 
 describe("MountControls", () => {
-  const { getMountStatus, sendMountAction } = require("@/lib/api-client")
-
   beforeEach(() => {
     vi.clearAllMocks()
-    getMountStatus.mockResolvedValue({
+    vi.mocked(getMountStatus).mockResolvedValue({
       status: "Ready",
       tracking: false,
       direction: true,
@@ -52,7 +51,7 @@ describe("MountControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /Start Tracking/i }))
 
     await waitFor(() => {
-      expect(sendMountAction).toHaveBeenCalledWith("start", expect.objectContaining({
+      expect(vi.mocked(sendMountAction)).toHaveBeenCalledWith("start", expect.objectContaining({
         speed: expect.any(Number),
         direction: "cw",
       }))
@@ -60,7 +59,7 @@ describe("MountControls", () => {
   })
 
   it("handles stop tracking", async () => {
-    getMountStatus.mockResolvedValueOnce({
+    vi.mocked(getMountStatus).mockResolvedValueOnce({
       status: "Tracking",
       tracking: true,
       direction: true,
@@ -73,7 +72,7 @@ describe("MountControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Stop$/i }))
 
     await waitFor(() => {
-      expect(sendMountAction).toHaveBeenCalledWith("stop")
+      expect(vi.mocked(sendMountAction)).toHaveBeenCalledWith("stop")
     })
   })
 })

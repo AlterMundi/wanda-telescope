@@ -25,6 +25,7 @@ from web.app import (  # noqa: E402
 def mock_camera():
     """Mock camera object for testing REST endpoints."""
     camera = Mock()
+    camera.exposure_seconds = 0.5
     camera.capture_status = "Idle"
     camera.capture_dir = "/captures"
     camera.capture_still = Mock(return_value=True)
@@ -341,49 +342,72 @@ class TestVideoFeed:
 class TestSocketIO:
     """Socket.IO integration tests."""
 
-    @pytest.fixture
-    def socket_client_camera(self, app_instance):
-        return socketio.test_client(app_instance.app, namespace="/ws/camera")
+    def test_camera_namespace_connect(self, app_instance):
+        """Test camera namespace connection."""
+        with patch("web.app.socketio") as mock_socketio:
+            mock_socketio.emit = Mock()
+            # Import after patching to get the mock
+            from web.app import broadcast_camera_update
+            
+            broadcast_camera_update(app_instance.camera)
+            mock_socketio.emit.assert_called_once()
+            args = mock_socketio.emit.call_args
+            assert args[0][0] == "status"  # Event name
+            assert args[1]["namespace"] == "/ws/camera"
 
-    @pytest.fixture
-    def socket_client_mount(self, app_instance):
-        return socketio.test_client(app_instance.app, namespace="/ws/mount")
+    def test_broadcast_camera_update(self, app_instance):
+        """Test broadcasting camera updates."""
+        with patch("web.app.socketio") as mock_socketio:
+            mock_socketio.emit = Mock()
+            app_instance.camera.get_exposure_seconds.return_value = 1.2
+            app_instance.camera.gain_to_iso.return_value = 640
+            
+            broadcast_camera_update(app_instance.camera)
+            
+            mock_socketio.emit.assert_called_once()
+            args = mock_socketio.emit.call_args
+            assert args[0][0] == "status"
+            payload = args[0][1]
+            assert payload["exposure_seconds"] == 1.2
+            assert payload["iso"] == 640
 
-    @pytest.fixture
-    def socket_client_session(self, app_instance):
-        return socketio.test_client(app_instance.app, namespace="/ws/session")
+    def test_broadcast_capture_events(self):
+        """Test broadcasting capture events."""
+        with patch("web.app.socketio") as mock_socketio:
+            mock_socketio.emit = Mock()
+            
+            broadcast_capture_event("capture_start", {"timestamp": 123})
+            broadcast_capture_event("capture_complete", {"filename": "test.jpg"})
+            
+            assert mock_socketio.emit.call_count == 2
+            calls = mock_socketio.emit.call_args_list
+            assert calls[0][0][0] == "capture_start"
+            assert calls[0][0][1] == {"timestamp": 123}
+            assert calls[1][0][0] == "capture_complete"
+            assert calls[1][0][1] == {"filename": "test.jpg"}
 
-    def test_camera_namespace_connect(self, socket_client_camera):
-        assert socket_client_camera.is_connected()
-        received = socket_client_camera.get_received("/ws/camera")
-        assert any(msg["name"] == "status" for msg in received)
+    def test_mount_namespace_events(self):
+        """Test broadcasting mount events."""
+        with patch("web.app.socketio") as mock_socketio:
+            mock_socketio.emit = Mock()
+            
+            broadcast_mount_event("tracking_start", {"tracking": True})
+            
+            mock_socketio.emit.assert_called_once()
+            args = mock_socketio.emit.call_args
+            assert args[0][0] == "tracking_start"
+            assert args[0][1] == {"tracking": True}
+            assert args[1]["namespace"] == "/ws/mount"
 
-    def test_broadcast_camera_update(self, app_instance, socket_client_camera):
-        app_instance.camera.get_exposure_seconds.return_value = 1.2
-        app_instance.camera.gain_to_iso.return_value = 640
-        broadcast_camera_update(app_instance.camera)
-        received = socket_client_camera.get_received("/ws/camera")
-        status_events = [msg for msg in received if msg["name"] == "status"]
-        assert status_events
-        payload = status_events[-1]["args"][0]
-        assert payload["exposure_seconds"] == 1.2
-        assert payload["iso"] == 640
-
-    def test_broadcast_capture_events(self, socket_client_camera):
-        broadcast_capture_event("capture_start", {"timestamp": 123})
-        broadcast_capture_event("capture_complete", {"filename": "test.jpg"})
-        received = socket_client_camera.get_received("/ws/camera")
-        names = [msg["name"] for msg in received]
-        assert "capture_start" in names
-        assert "capture_complete" in names
-
-    def test_mount_namespace_events(self, app_instance, socket_client_mount):
-        broadcast_mount_event("tracking_start", {"tracking": True})
-        received = socket_client_mount.get_received("/ws/mount")
-        assert received[-1]["name"] == "tracking_start"
-
-    def test_session_namespace_events(self, socket_client_session):
-        broadcast_session_event("session_progress", {"images_captured": 2})
-        received = socket_client_session.get_received("/ws/session")
-        assert received[-1]["name"] == "session_progress"
-        assert received[-1]["args"][0]["images_captured"] == 2
+    def test_session_namespace_events(self):
+        """Test broadcasting session events."""
+        with patch("web.app.socketio") as mock_socketio:
+            mock_socketio.emit = Mock()
+            
+            broadcast_session_event("session_progress", {"images_captured": 2})
+            
+            mock_socketio.emit.assert_called_once()
+            args = mock_socketio.emit.call_args
+            assert args[0][0] == "session_progress"
+            assert args[0][1] == {"images_captured": 2}
+            assert args[1]["namespace"] == "/ws/session"

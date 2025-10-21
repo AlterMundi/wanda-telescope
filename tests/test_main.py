@@ -195,7 +195,7 @@ class TestMainFunction:
         mock_signal.assert_any_call(signal.SIGINT, signal_handler)
         mock_signal.assert_any_call(signal.SIGTERM, signal_handler)
         mock_init_camera.assert_called_once()
-        mock_wanda_app.assert_called_once_with(camera=mock_camera)
+        mock_wanda_app.assert_called_once_with(camera=mock_camera, cors_origins=["*"])
         mock_app_instance.run.assert_called_once()
         assert "Starting Wanda Astrophotography System" in mock_stdout.getvalue()
 
@@ -452,7 +452,7 @@ class TestMainEntryPointExecution:
 
         assert isinstance(logger, logging.Logger)
         mock_factory.create_camera.assert_called_once()
-        mock_wanda_app.assert_called_once_with(camera=mock_camera)
+        mock_wanda_app.assert_called_once_with(camera=mock_camera, cors_origins=["*"])
         mock_app_instance.run.assert_called_once()
 
 

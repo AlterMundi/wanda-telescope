@@ -12,7 +12,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -60,3 +60,13 @@ Thumbs.db
 .directory
 
 *.coverage
+htmlcov/
+.pytest_cache/
+.coverage
+
+# Node.js / Next.js
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
