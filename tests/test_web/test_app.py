@@ -165,23 +165,39 @@ class TestCameraEndpoints:
     def test_camera_capture_success(self, client, app_instance):
         app_instance.camera.capture_status = "Capture complete"
 
-        response = client.post("/api/camera/capture")
-        body = response.get_json()
+        with patch("web.app.broadcast_capture_event") as mock_broadcast:
+            response = client.post("/api/camera/capture")
+            body = response.get_json()
 
-        assert response.status_code == 200
-        assert body["success"] is True
-        assert body["data"]["capture_status"] == "Capture complete"
-        app_instance.camera.capture_still.assert_called_once()
+            assert response.status_code == 200
+            assert body["success"] is True
+            assert body["data"]["capture_status"] == "Capture complete"
+            app_instance.camera.capture_still.assert_called_once()
+            
+            # Verify capture_start and capture_complete events were emitted
+            assert mock_broadcast.call_count == 2
+            calls = mock_broadcast.call_args_list
+            assert calls[0][0][0] == "capture_start"
+            assert calls[0][0][1]["capture_status"] == "Capturing"
+            assert calls[0][0][1]["recording"] is True
+            assert calls[1][0][0] == "capture_complete"
 
     def test_camera_capture_failure(self, client, app_instance):
         app_instance.camera.capture_still.return_value = False
 
-        response = client.post("/api/camera/capture")
-        body = response.get_json()
+        with patch("web.app.broadcast_capture_event") as mock_broadcast:
+            response = client.post("/api/camera/capture")
+            body = response.get_json()
 
-        assert response.status_code == 500
-        assert body["success"] is False
-        assert body["code"] == "CAPTURE_FAILED"
+            assert response.status_code == 500
+            assert body["success"] is False
+            assert body["code"] == "CAPTURE_FAILED"
+            
+            # Verify capture_start event was still emitted before failure
+            mock_broadcast.assert_any_call("capture_start", {
+                "capture_status": "Capturing",
+                "recording": True
+            })
 
 
 class TestMountEndpoints:

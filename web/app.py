@@ -245,6 +245,12 @@ class WandaApp:
 
     def _capture_still(self):
         try:
+            # Emit capture_start event before beginning capture
+            broadcast_capture_event("capture_start", {
+                "capture_status": "Capturing",
+                "recording": True
+            })
+            
             # Run blocking camera capture in thread pool to avoid blocking eventlet
             # Timeout based on exposure time + 30 second buffer
             exposure = getattr(self.camera, "exposure_seconds", 1.0)

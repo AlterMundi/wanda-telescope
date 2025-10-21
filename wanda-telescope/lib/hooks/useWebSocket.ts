@@ -3,7 +3,18 @@
 import { useEffect, useRef, useState } from "react"
 import { io, type Socket } from "socket.io-client"
 
-const WS_BASE = (process.env.NEXT_PUBLIC_WS_URL || "http://localhost:5000").replace(/\/$/, "")
+// Use empty string for same-origin, or explicit URL if provided
+// Note: Empty string means socket.io will use the current page's origin
+const WS_BASE_ENV = process.env.NEXT_PUBLIC_WS_URL
+const WS_BASE = (WS_BASE_ENV !== undefined && WS_BASE_ENV !== "" ? WS_BASE_ENV : "").replace(/\/$/, "")
+
+// Debug logging to verify configuration (remove in production)
+if (typeof window !== "undefined" && WS_BASE) {
+  console.log("WebSocket: Using explicit base URL:", WS_BASE)
+} else if (typeof window !== "undefined") {
+  console.log("WebSocket: Using same-origin (current page URL)")
+}
+
 const MAX_RETRY_DELAY_MS = 30_000
 
 function calculateBackoffDelay(attempt: number) {
