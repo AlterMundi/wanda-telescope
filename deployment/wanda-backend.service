@@ -1,0 +1,28 @@
+[Unit]
+Description=Wanda Telescope Backend API
+After=network.target
+Documentation=https://github.com/AlterMundi/wanda-telescope
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/wanda-telescope
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/admin/wanda-telescope/venv/bin/python main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+MemoryMax=1G
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+

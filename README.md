@@ -4,7 +4,7 @@ An open-source Raspberry Pi-based astrophotography system featuring an equatoria
 
 ## Overview
 
-WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a full-stack astrophotography system for Raspberry Pi featuring a modern Next.js frontend and Python Flask backend. It provides a comprehensive solution for controlling camera and equatorial mount systems for celestial object tracking, with real-time WebSocket updates, automated capture sessions, and production-ready deployment.
+WANDA (World-wide Area Network for Distributed Astronomy) is a full-stack astrophotography system for Raspberry Pi featuring a modern **Next.js 14** frontend with **React 19** and a **Python Flask** backend with **Socket.IO**. It provides a comprehensive solution for controlling camera and equatorial mount systems for celestial object tracking, with real-time WebSocket updates, automated capture sessions, and production-ready deployment via Nginx reverse proxy.
 
 ## Features
 
@@ -16,11 +16,12 @@ WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a full-stack astrophoto
 - **State Preservation**: Non-intrusive camera operation with state restoration
 
 ### Software Architecture
-- **Modern Web Interface**: Next.js 14 (React 19) frontend with TypeScript
+- **Modern Web Interface**: Next.js 14 with App Router and React 19 + TypeScript
 - **REST API Backend**: Flask-based API with comprehensive endpoint coverage
-- **Real-Time Updates**: WebSocket (Socket.IO) communication for live status updates
-- **Production Ready**: Nginx reverse proxy with systemd service management
-- **Auto-Startup**: Services automatically start on boot
+- **Real-Time Updates**: WebSocket (Socket.IO) communication via 3 namespaces (`/ws/camera`, `/ws/mount`, `/ws/session`)
+- **Production Ready**: Nginx reverse proxy unifying frontend (port 3000) and backend (port 5000) on port 80
+- **Auto-Startup**: Systemd services for both frontend and backend automatically start on boot
+- **Concurrent Operations**: ThreadPoolExecutor and eventlet for non-blocking camera operations
 
 ### User Features
 - **Session Management**: Automated capture sessions with progress tracking and metadata export
@@ -55,7 +56,8 @@ WANDA uses a decoupled architecture with separate frontend and backend services 
 │   │  ├─ / → Next.js Frontend (Port 3000)            │  │
 │   │  ├─ /api → Flask Backend (Port 5000)            │  │
 │   │  ├─ /socket.io → WebSocket (Port 5000)          │  │
-│   │  └─ /video_feed → MJPEG Stream (Port 5000)      │  │
+│   │  ├─ /video_feed → MJPEG Stream (Port 5000)      │  │
+│   │  └─ /captures → Static Files (filesystem)       │  │
 │   └─────────────────────────────────────────────────┘  │
 │                                                         │
 │   ┌──────────────────┐      ┌──────────────────────┐   │
@@ -65,6 +67,7 @@ WANDA uses a decoupled architecture with separate frontend and backend services 
 │   │  Next.js 14      │◄────►│  Flask + SocketIO   │   │
 │   │  React 19        │ REST │  Python 3.11+        │   │
 │   │  TypeScript      │ WS   │  Eventlet            │   │
+│   │  shadcn/ui       │      │  ThreadPoolExecutor  │   │
 │   └──────────────────┘      └──────────────────────┘   │
 │                                      │                  │
 │                                      ▼                  │
@@ -172,9 +175,9 @@ npm run build
 ### Step 5: Configure Systemd Services
 
 ```bash
-# Copy service files (adjust paths if needed)
-sudo cp /path/to/your/service/files/wanda-backend.service /etc/systemd/system/
-sudo cp /path/to/your/service/files/wanda-frontend.service /etc/systemd/system/
+# Copy service files from deployment directory
+sudo cp deployment/wanda-backend.service /etc/systemd/system/
+sudo cp deployment/wanda-frontend.service /etc/systemd/system/
 
 # Reload systemd and enable services
 sudo systemctl daemon-reload
@@ -190,16 +193,17 @@ sudo systemctl status wanda-backend.service
 sudo systemctl status wanda-frontend.service
 ```
 
+**Note:** If your installation path differs from `/home/admin/wanda-telescope`, edit the service files before copying to update `WorkingDirectory`, `ExecStart`, and `User`/`Group` fields.
+
 ### Step 6: Configure Nginx
 
 ```bash
-# Create Nginx configuration
-sudo nano /etc/nginx/sites-available/wanda-telescope
+# Copy Nginx configuration from deployment directory
+sudo cp deployment/wanda-telescope.nginx /etc/nginx/sites-available/wanda-telescope
 
-# Paste configuration (see docs/DEPLOYMENT.md for full config)
-# Then enable the site
+# Enable the site
 sudo ln -s /etc/nginx/sites-available/wanda-telescope /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default  # Remove default site
+sudo rm /etc/nginx/sites-enabled/default  # Remove default site (optional)
 
 # Test and restart Nginx
 sudo nginx -t
@@ -207,13 +211,22 @@ sudo systemctl restart nginx
 sudo systemctl enable nginx
 ```
 
+**Note:** If your installation path or username differs, edit `/etc/nginx/sites-available/wanda-telescope` and update the `alias` path in the `/captures` location block.
+
+**For detailed deployment instructions, troubleshooting, and production tips, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).**
+
 ### Step 7: Access WANDA
 
 Open a web browser and navigate to:
 - **Local access**: `http://raspberrypi.local/` (or use Pi's IP address)
 - **Same network**: `http://[pi-ip-address]/`
 
-You should see the WANDA telescope interface!
+You should see the modern WANDA telescope interface with:
+- Live camera preview with MJPEG streaming
+- Camera controls (exposure, ISO, gain)
+- Mount tracking controls
+- Session management for automated captures
+- Real-time status updates via WebSocket
 
 ### Quick Development Setup (No Services)
 
@@ -280,11 +293,12 @@ npm run dev  # Runs on port 3000
 The web interface is a standalone Next.js application located in `wanda-telescope/`:
 
 #### Technology Stack
-- **Next.js 14** with App Router
-- **React 19** with TypeScript
-- **Tailwind CSS** + **shadcn/ui** components
-- **Socket.IO Client** for WebSocket communication
-- **Vitest** for component testing
+- **Next.js 14.2.25** with App Router
+- **React 18.2** (compatible with React 19 features) with TypeScript 5.6
+- **Tailwind CSS 3.4** + **shadcn/ui** components (Radix UI primitives)
+- **Socket.IO Client 4.7** for WebSocket communication
+- **Vitest 2.1** + Testing Library for component testing
+- **Lucide React** for icons
 
 #### Key Features
 - **Real-time Updates**: WebSocket integration for live camera/mount status
@@ -418,10 +432,17 @@ wanda-telescope/
 │   │   └── hooks/
 │   │       └── useWebSocket.ts # WebSocket hook
 │   ├── package.json            # Frontend dependencies
-│   ├── next.config.mjs         # Next.js configuration
+│   ├── next.config.mjs         # Next.js configuration (API proxy)
 │   ├── tailwind.config.ts      # Tailwind CSS config
 │   ├── tsconfig.json           # TypeScript config
-│   └── vitest.config.ts        # Vitest test config
+│   ├── vitest.config.ts        # Vitest test config
+│   └── env.*.sample            # Environment variable templates
+│
+├── deployment/                  # Production deployment files
+│   ├── wanda-backend.service   # Backend systemd service
+│   ├── wanda-frontend.service  # Frontend systemd service
+│   ├── wanda-telescope.nginx   # Nginx reverse proxy config
+│   └── README.md               # Deployment instructions
 │
 ├── utils/                       # Utility functions
 │   └── storage.py              # Storage management
@@ -431,17 +452,18 @@ wanda-telescope/
 │
 ├── docs/                        # Documentation
 │   ├── archive/                # Archived planning documents
-│   │   ├── NEXTJS_INTEGRATION_PLAN.md
-│   │   ├── v0-report.md
-│   │   └── DEADLOCK_FIX_SUMMARY.md
-│   ├── ARDUCAM_UC955_SETUP.md
-│   ├── AUTO_STARTUP_README.md
-│   ├── camera_state_restoration.md
-│   ├── DEV_DEPLOYMENT.md
-│   ├── NETWORK_DISCOVERY.md
-│   ├── picamera2_controls.md
-│   ├── RASPBERRY_PI_ECOSYSTEM_LIMITATIONS.md
-│   └── test_capture_isolation.md
+│   │   ├── NEXTJS_INTEGRATION_PLAN.md  # Full Next.js integration plan
+│   │   ├── v0-report.md                # v0.dev UI generation report
+│   │   └── DEADLOCK_FIX_SUMMARY.md     # Backend concurrency fix
+│   ├── DEPLOYMENT.md           # Production deployment guide ⭐
+│   ├── ARDUCAM_UC955_SETUP.md  # Arducam camera configuration
+│   ├── AUTO_STARTUP_README.md  # Legacy auto-startup (systemd v1)
+│   ├── DEV_DEPLOYMENT.md       # Development deployment guide
+│   ├── NETWORK_DISCOVERY.md    # Network discovery tools
+│   ├── camera_state_restoration.md     # Camera state management
+│   ├── picamera2_controls.md           # Camera control reference
+│   ├── RASPBERRY_PI_ECOSYSTEM_LIMITATIONS.md  # Platform constraints
+│   └── test_capture_isolation.md       # Testing methodology
 │
 ├── tests/                       # Test suite (pytest)
 │   ├── test_main.py            # Main application tests
@@ -459,12 +481,28 @@ wanda-telescope/
 └── .gitignore                   # Git ignore rules
 ```
 
-### Service Files (Deployed to `/etc/systemd/system/`)
-- `wanda-backend.service` - Flask backend service
-- `wanda-frontend.service` - Next.js frontend service
+### Deployment Files (`deployment/`)
 
-### Nginx Configuration (Deployed to `/etc/nginx/sites-available/`)
-- `wanda-telescope` - Reverse proxy configuration
+Service and configuration files for production deployment:
+
+- **`wanda-backend.service`** - Systemd service for Flask backend (Python)
+  - Runs `main.py` with venv Python interpreter
+  - Auto-restart on failure
+  - Logs to systemd journal
+  
+- **`wanda-frontend.service`** - Systemd service for Next.js frontend (Node.js)
+  - Runs `npm start` in production mode
+  - Depends on backend service
+  - Auto-restart on failure
+  
+- **`wanda-telescope.nginx`** - Nginx reverse proxy configuration
+  - Routes `/` to Next.js (port 3000)
+  - Routes `/api`, `/socket.io`, `/video_feed` to Flask (port 5000)
+  - Serves `/captures` as static files
+  
+- **`README.md`** - Detailed deployment instructions and troubleshooting
+
+See `deployment/README.md` for installation and customization instructions.
 
 ## Managing Services
 
@@ -493,6 +531,38 @@ sudo systemctl stop wanda-frontend.service
 sudo systemctl disable wanda-backend.service
 sudo systemctl disable wanda-frontend.service
 ```
+
+## Critical Implementation Notes
+
+### Backend Concurrency Fix
+
+The Flask backend uses **selective eventlet monkey patching** to prevent deadlocks:
+
+```python
+# main.py (lines 5-8)
+import eventlet
+eventlet.monkey_patch(socket=True, select=True, time=True, 
+                     os=False, thread=False, subprocess=False)
+```
+
+**Why selective patching?**
+- Makes I/O and `time.sleep()` non-blocking for concurrent request handling
+- Preserves native threading for `picamera2` compatibility
+- Prevents MJPEG video stream from blocking other requests
+- Enables concurrent camera captures with `ThreadPoolExecutor`
+
+**Without this fix:** The backend deadlocks within minutes under load. See `docs/archive/DEADLOCK_FIX_SUMMARY.md` for full technical analysis.
+
+### Next.js Backend Connection
+
+The frontend uses IPv4 (`127.0.0.1`) instead of `localhost` for backend connections:
+
+```javascript
+// next.config.mjs
+destination: "http://127.0.0.1:5000/api/:path*"
+```
+
+This prevents IPv6 resolution issues on Raspberry Pi OS.
 
 ## Troubleshooting
 
@@ -551,9 +621,51 @@ curl http://localhost:5000/api/status
 
 ## API Documentation
 
-For detailed API endpoint documentation, see:
-- REST API: Available at `http://your-pi-ip/api/*`
-- WebSocket Events: See `docs/archive/NEXTJS_INTEGRATION_PLAN.md` for event documentation
+### REST API Endpoints
+
+All API endpoints are prefixed with `/api` and return JSON responses:
+
+**Camera Endpoints:**
+- `GET /api/camera/status` - Get current camera settings and status
+- `POST /api/camera/settings` - Update camera settings (exposure, ISO, gain)
+- `POST /api/camera/capture` - Capture a single image
+- `GET /api/captures` - List all captured images
+
+**Mount Endpoints:**
+- `GET /api/mount/status` - Get mount tracking status
+- `POST /api/mount/tracking` - Start/stop tracking (JSON body: `{"tracking": true/false}`)
+
+**Session Endpoints:**
+- `GET /api/session/status` - Get current session status and progress
+- `POST /api/session/start` - Start automated capture session
+- `POST /api/session/stop` - Stop current session
+
+**Video Stream:**
+- `GET /video_feed` - MJPEG live camera stream
+
+### WebSocket Namespaces
+
+Real-time bidirectional communication via Socket.IO:
+
+**`/ws/camera` - Camera Events**
+- `status` - Camera settings updates (exposure, ISO, mode)
+- `capture_start` - Capture beginning
+- `capture_complete` - Capture finished with filename
+- `capture_error` - Capture failed with error message
+
+**`/ws/mount` - Mount Events**
+- `status` - Mount tracking status
+- `tracking_start` - Tracking started
+- `tracking_stop` - Tracking stopped
+
+**`/ws/session` - Session Events**
+- `status` - Session status and progress
+- `session_start` - Session initiated
+- `session_progress` - Image count updates
+- `session_complete` - Session finished
+- `session_error` - Session failed
+
+For detailed event payloads and integration examples, see `docs/archive/NEXTJS_INTEGRATION_PLAN.md`.
 
 ### Example API Calls
 
@@ -568,6 +680,41 @@ curl -X POST http://localhost/api/capture
 curl http://localhost/api/captures
 ```
 
+## Development History
+
+### feat/v0-ui Branch (October 2025)
+
+Major architectural overhaul introducing modern Next.js frontend:
+
+**Frontend Migration:**
+- Generated initial UI with v0.dev (shadcn/ui + Tailwind CSS)
+- Integrated Next.js 14 with React 18 and TypeScript
+- Implemented real-time WebSocket communication via Socket.IO
+- Created comprehensive component library with tests
+- Added MJPEG video streaming with overlays (histogram, focus assist)
+
+**Backend Enhancements:**
+- Converted Flask from template-based to pure REST API
+- Added Flask-SocketIO with 3 namespaces (`/ws/camera`, `/ws/mount`, `/ws/session`)
+- Implemented ThreadPoolExecutor for non-blocking camera operations
+- Added selective eventlet monkey patching to prevent deadlocks
+- Fixed WebSocket namespace signatures for proper connection handling
+
+**Production Infrastructure:**
+- Created systemd services for auto-start (frontend + backend)
+- Configured Nginx reverse proxy for unified access on port 80
+- Added comprehensive deployment files and documentation
+- IPv4-only backend connections to avoid Pi OS networking issues
+
+**Key Commits:**
+- `759db69` - UI color scheme refinements
+- `70e0649` - WebSocket fixes and real-time updates
+- `a60878d` - Critical deadlock fix + Nginx production setup
+- `fe12239` - Next.js frontend runs correctly
+- `65be4e6` - Initial v0.dev UI generation
+
+See `docs/archive/NEXTJS_INTEGRATION_PLAN.md` and `docs/archive/DEADLOCK_FIX_SUMMARY.md` for technical details.
+
 ## License
 
 This project is open-source. Please ensure you provide appropriate attribution when using or modifying this code.
@@ -576,6 +723,14 @@ This project is open-source. Please ensure you provide appropriate attribution w
 
 - **Issues**: Report bugs and feature requests on GitHub
 - **Community**: Join discussions in GitHub Discussions
+- **Documentation**: See `docs/` directory for guides and technical details
+
+## Quick Links
+
+- 📚 [Production Deployment Guide](docs/DEPLOYMENT.md)
+- 🏗️ [Next.js Integration Plan](docs/archive/NEXTJS_INTEGRATION_PLAN.md)
+- 🐛 [Deadlock Fix Technical Analysis](docs/archive/DEADLOCK_FIX_SUMMARY.md)
+- 🎨 [v0.dev UI Generation Report](docs/archive/v0-report.md)
 
 ---
 
