@@ -179,7 +179,7 @@ export function CapturePanel() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 max-h-[600px] overflow-y-auto p-6">
           {captures.length === 0 ? (
             <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-background/60 text-center text-sm text-muted-foreground">
               <ImageIcon className="h-6 w-6" />
@@ -187,7 +187,7 @@ export function CapturePanel() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {captures.map((filename) => (
+              {captures.slice(0, 20).map((filename) => (
                 <Card key={filename} className="overflow-hidden">
                   <CardContent className="flex items-center gap-4 p-4">
                     <div className="relative h-16 w-16 overflow-hidden rounded border border-border">

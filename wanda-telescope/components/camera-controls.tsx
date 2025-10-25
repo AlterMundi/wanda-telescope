@@ -184,9 +184,9 @@ export function CameraControls() {
       </Button>
 
       <Collapsible defaultOpen>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-6 py-3 hover:bg-accent">
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/40 px-6 py-3 text-foreground transition-colors hover:bg-secondary/60">
           <span className="text-sm font-medium">Exposure Settings</span>
-          <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-primary transition-transform duration-200 data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6 px-6 pb-6 pt-2">
           <div className="space-y-3">
@@ -224,9 +224,9 @@ export function CameraControls() {
       </Collapsible>
 
       <Collapsible defaultOpen>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-6 py-3 hover:bg-accent">
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/40 px-6 py-3 text-foreground transition-colors hover:bg-secondary/60">
           <span className="text-sm font-medium">ISO Sensitivity</span>
-          <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-primary transition-transform duration-200 data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6 px-6 pb-6 pt-2">
           <div className="space-y-3">
@@ -249,9 +249,9 @@ export function CameraControls() {
       </Collapsible>
 
       <Collapsible defaultOpen>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-6 py-3 hover:bg-accent">
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/40 px-6 py-3 text-foreground transition-colors hover:bg-secondary/60">
           <span className="text-sm font-medium">Image Quality</span>
-          <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-primary transition-transform duration-200 data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6 px-6 pb-6 pt-2">
           <div className="space-y-3">
@@ -285,9 +285,9 @@ export function CameraControls() {
       </Collapsible>
 
       <Collapsible>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-6 py-3 hover:bg-accent">
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/40 px-6 py-3 text-foreground transition-colors hover:bg-secondary/60">
           <span className="text-sm font-medium">Advanced Options</span>
-          <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-primary transition-transform duration-200 data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 px-6 pb-6 pt-2">
           <div className="flex items-center justify-between">

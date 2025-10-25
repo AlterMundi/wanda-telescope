@@ -31,7 +31,7 @@ export default function HomePage() {
               <div className="border-b border-border px-6 py-4">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Camera Feed</h2>
               </div>
-              <ImagePreview showHistogram showFocusAssist={false} />
+              <ImagePreview showHistogram={false} showFocusAssist={false} />
             </div>
 
             <div className="rounded-xl border border-border bg-card shadow-sm">
