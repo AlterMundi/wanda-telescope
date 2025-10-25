@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
 
 ## Common Development Commands
 

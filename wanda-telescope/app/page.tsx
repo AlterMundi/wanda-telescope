@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { CameraControls } from "@/components/camera-controls"
 import { CapturePanel } from "@/components/capture-panel"
 import { ImagePreview } from "@/components/image-preview"
@@ -15,7 +14,8 @@ export default function HomePage() {
       <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <Image src="/favicon.ico" alt="WANDA" width={32} height={32} className="rounded" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/favicon.ico" alt="WANDA" width={32} height={32} className="rounded" />
             <div>
               <h1 className="text-lg font-semibold">WANDA Telescope Control</h1>
               <p className="text-xs text-muted-foreground">Raspberry Pi 5 • Flask API • Next.js UI</p>

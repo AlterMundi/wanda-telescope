@@ -6,8 +6,8 @@ import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Wanda Telescope - Astrophotography Control",
-  description: "Professional telescope camera control interface",
+  title: "WANDA Telescope - Astrophotography Control",
+  description: "WANDA (World-wide Area Network for Distributed Astronomy) - Professional telescope camera control interface",
   generator: "v0.app",
 }
 

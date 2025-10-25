@@ -9,7 +9,7 @@ alwaysApply: true
 - Claude Code users should NOT load `.cursor/rules/*`. Use the repository-level `CLAUDE.md` instead, which mirrors these rules for Claude.
 
 ## Project Context
-WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
 
 ## Core Architecture Requirements
 - **Factory Pattern**: Use factories for camera and mount hardware detection
@@ -67,7 +67,7 @@ tests/          # Test suite (unit, integration, web)
 - Claude Code users should NOT load `.cursor/rules/*`. Use the repository-level `CLAUDE.md` instead, which mirrors these rules for Claude.
 
 ## Project Context
-WANDA (Wide-Angle Nightsky Digital Astrophotographer) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
 
 ## Core Architecture Requirements
 - **Factory Pattern**: Use factories for camera and mount hardware detection
