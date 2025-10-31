@@ -9,21 +9,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+WANDA (World-wide Area Network for Distributed Astronomy) is a full-stack astrophotography system for Raspberry Pi featuring a **Next.js 14 frontend** with **React 19** and a **Python Flask backend** with **Socket.IO**. It provides a comprehensive solution for controlling camera and equatorial mount systems for celestial object tracking, with real-time WebSocket updates, automated capture sessions, and production-ready deployment via Nginx reverse proxy.
 
 ## Common Development Commands
 
 ### Running the Application
+
+#### Production Mode (Systemd Services)
 ```bash
-# Create virtual environment if not exists
-python3 -m venv venv
+# Check service status
+sudo systemctl status wanda-backend wanda-frontend nginx
+
+# View logs
+sudo journalctl -u wanda-backend -f
+sudo journalctl -u wanda-frontend -f
+
+# Restart services
+sudo systemctl restart wanda-backend
+sudo systemctl restart wanda-frontend
+```
+
+#### Development Mode (Manual)
+```bash
+# Terminal 1: Backend
 source venv/bin/activate
+python main.py  # Runs on port 5000
 
-# Install dependencies
-pip install -r requirements.txt
+# Terminal 2: Frontend (in wanda-telescope/ subdirectory)
+cd wanda-telescope
+npm run dev  # Runs on port 3000
 
-# Run the application
-python main.py
+# Access at http://localhost:3000 (dev) or http://localhost/ (production via Nginx)
 ```
 
 ### Testing
@@ -106,11 +122,19 @@ pytest --cov=camera,mount,web,utils,session --cov-report=html
 - JSON metadata export for each session
 - Handles both photo and video capture sessions
 
-**Web Interface** (`web/`):
-- Flask-based REST API serving HTML/JS frontend
-- Real-time camera feed via MJPEG streaming at `/video_feed`
-- AJAX-based control for responsive UI
-- Collapsible control panels for camera, mount, and session management
+**Web Backend** (`web/`):
+- Flask-based REST API with comprehensive endpoint coverage
+- Socket.IO with 3 namespaces (`/ws/camera`, `/ws/mount`, `/ws/session`)
+- Real-time MJPEG streaming at `/video_feed`
+- ThreadPoolExecutor for non-blocking camera operations
+- Selective eventlet monkey patching to prevent deadlocks
+
+**Frontend Application** (`wanda-telescope/`):
+- Next.js 14 with App Router and React 19 + TypeScript
+- Socket.IO client for real-time WebSocket communication
+- shadcn/ui components with Tailwind CSS
+- Live preview with histogram and focus assist overlays
+- Modern glassmorphism design with dark theme
 
 **Storage Management** (`utils/storage.py`):
 - Intelligent storage hierarchy with automatic fallback
@@ -212,21 +236,47 @@ Main configuration in `config.py`:
 
 ## API Endpoints
 
-### Camera Control
-- `POST /capture_still` - Capture a photo
-- `POST /start_video` - Start video recording  
-- `POST /stop_video` - Stop video recording
-- `GET /capture_status` - Get current capture status
-- `GET /video_feed` - MJPEG stream for live preview
+All API endpoints are prefixed with `/api` and return JSON responses.
 
-### Mount Control
-- `POST /start_tracking` - Start mount tracking with specified parameters
-- `POST /stop_tracking` - Stop mount tracking
+### Camera Endpoints
+- `GET /api/camera/status` - Get current camera settings and status
+- `POST /api/camera/settings` - Update camera settings (exposure, ISO, gain)
+- `POST /api/camera/capture` - Capture a single image
+- `GET /api/captures` - List all captured images
 
-### Session Management
-- `POST /start_session` - Start automated capture session
-- `POST /stop_session` - Stop current session
-- `GET /session_status` - Get session progress and status
+### Mount Endpoints
+- `GET /api/mount/status` - Get mount tracking status
+- `POST /api/mount/tracking` - Start/stop tracking (JSON body: `{"tracking": true/false}`)
+
+### Session Endpoints
+- `GET /api/session/status` - Get current session status and progress
+- `POST /api/session/start` - Start automated capture session
+- `POST /api/session/stop` - Stop current session
+
+### Video Stream
+- `GET /video_feed` - MJPEG live camera stream
+
+### WebSocket Namespaces
+
+Real-time bidirectional communication via Socket.IO:
+
+**`/ws/camera` - Camera Events**
+- `status` - Camera settings updates
+- `capture_start` - Capture beginning
+- `capture_complete` - Capture finished with filename
+- `capture_error` - Capture failed with error message
+
+**`/ws/mount` - Mount Events**
+- `status` - Mount tracking status
+- `tracking_start` - Tracking started
+- `tracking_stop` - Tracking stopped
+
+**`/ws/session` - Session Events**
+- `status` - Session status and progress
+- `session_start` - Session initiated
+- `session_progress` - Image count updates
+- `session_complete` - Session finished
+- `session_error` - Session failed
 
 ## Hardware Support Details
 

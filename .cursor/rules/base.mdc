@@ -9,7 +9,7 @@ alwaysApply: true
 - Claude Code users should NOT load `.cursor/rules/*`. Use the repository-level `CLAUDE.md` instead, which mirrors these rules for Claude.
 
 ## Project Context
-WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+WANDA (World-wide Area Network for Distributed Astronomy) is a full-stack astrophotography system for Raspberry Pi featuring a **Next.js 14 frontend** with **React 19** and a **Python Flask backend** with **Socket.IO**. It provides a comprehensive solution for controlling camera and equatorial mount systems for celestial object tracking, with real-time WebSocket updates and production-ready deployment via Nginx reverse proxy.
 
 ## Core Architecture Requirements
 - **Factory Pattern**: Use factories for camera and mount hardware detection
@@ -57,17 +57,19 @@ WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astr
 camera/          # Camera implementations and factory
 mount/           # Mount control and stepper motor
 session/         # Automated capture sessions
-web/            # Flask web interface
+web/            # Flask REST API + Socket.IO backend
+wanda-telescope/ # Next.js 14 frontend application
 utils/          # Shared utilities
 tests/          # Test suite (unit, integration, web)
-```# WANDA Telescope - Base Rules (Always Applied)
+deployment/     # Systemd services and Nginx config
+```
 
-## Platform Usage
-- This file is for Cursor users only. Cursor will always apply `base.mdc` and you can enable additional rule files from `.cursor/rules/` as needed.
-- Claude Code users should NOT load `.cursor/rules/*`. Use the repository-level `CLAUDE.md` instead, which mirrors these rules for Claude.
-
-## Project Context
-WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astrophotography web application for Raspberry Pi. It provides a comprehensive web interface for controlling camera and equatorial mount for celestial object tracking.
+## Critical Architecture Notes
+- **Backend**: Flask + Socket.IO with selective eventlet monkey patching (prevents deadlocks)
+- **Frontend**: Next.js 14 with App Router, runs on port 3000 (dev) or via Nginx (production)
+- **WebSocket**: 3 namespaces (`/ws/camera`, `/ws/mount`, `/ws/session`)
+- **Production**: Unified via Nginx reverse proxy on port 80
+- **Services**: wanda-backend.service + wanda-frontend.service auto-start on boot
 
 ## Core Architecture Requirements
 - **Factory Pattern**: Use factories for camera and mount hardware detection
@@ -106,13 +108,3 @@ WANDA (World-wide Area Network for Distributed Astronomy) is a Python-based astr
 - Mount errors must safely return to home position
 - Web routes must return appropriate HTTP status codes with JSON error messages
 - Always log full stack traces for debugging
-
-## Project Structure
-```
-camera/          # Camera implementations and factory
-mount/           # Mount control and stepper motor
-session/         # Automated capture sessions
-web/            # Flask web interface
-utils/          # Shared utilities
-tests/          # Test suite (unit, integration, web)
-```
