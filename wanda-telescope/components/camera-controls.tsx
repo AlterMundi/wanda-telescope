@@ -200,13 +200,13 @@ export function CameraControls() {
                   className="h-7 w-20 text-right text-sm"
                   step="0.1"
                   min="0.1"
-                  max="300"
+                  max="230"
                 />
                 <span className="text-sm text-muted-foreground">s</span>
               </div>
             </div>
-            <Slider value={exposure} onValueChange={handleExposureChange} min={0.1} max={300} step={0.1} className="w-full" />
-            <p className="text-xs text-muted-foreground">Range: 0.1s - 300s</p>
+            <Slider value={exposure} onValueChange={handleExposureChange} min={0.1} max={230} step={0.1} className="w-full" />
+            <p className="text-xs text-muted-foreground">Range: 0.1s - 230s</p>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -232,54 +232,18 @@ export function CameraControls() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm">ISO</Label>
-              <Input
-                type="number"
-                value={iso[0]}
-                onChange={(e) => handleIsoChange([Number.parseInt(e.target.value)])}
-                className="h-7 w-20 text-right text-sm"
-                step="100"
-                min="100"
-                max="6400"
-              />
+                <Input
+                  type="number"
+                  value={iso[0]}
+                  onChange={(e) => handleIsoChange([Number.parseInt(e.target.value)])}
+                  className="h-7 w-20 text-right text-sm"
+                  step="100"
+                  min="100"
+                  max="1600"
+                />
             </div>
-            <Slider value={iso} onValueChange={handleIsoChange} min={100} max={6400} step={100} className="w-full" />
-            <p className="text-xs text-muted-foreground">Range: 100 - 6400</p>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <Collapsible defaultOpen>
-        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/40 px-6 py-3 text-foreground transition-colors hover:bg-secondary/60">
-          <span className="text-sm font-medium">Image Quality</span>
-          <ChevronDown className="h-4 w-4 text-primary transition-transform duration-200 data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-6 px-6 pb-6 pt-2">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Intensity</Label>
-              <Input
-                type="number"
-                value={intensity[0]}
-                onChange={(e) => handleIntensityChange([Number.parseFloat(e.target.value)])}
-                className="h-7 w-20 text-right text-sm"
-                step="0.1"
-                min="1.0"
-                max="80.0"
-              />
-            </div>
-            <Slider value={intensity} onValueChange={handleIntensityChange} min={1.0} max={80.0} step={0.1} className="w-full" />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleIntensityChange([10])} className="text-xs">
-              Low
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleIntensityChange([40])} className="text-xs">
-              Medium
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleIntensityChange([70])} className="text-xs">
-              High
-            </Button>
+            <Slider value={iso} onValueChange={handleIsoChange} min={100} max={1600} step={100} className="w-full" />
+            <p className="text-xs text-muted-foreground">Range: 100 - 1600</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
