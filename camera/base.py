@@ -2,6 +2,8 @@
 Abstract base class defining the camera interface.
 """
 from abc import ABC, abstractmethod
+import os
+import re
 import config
 
 class AbstractCamera(ABC):
@@ -161,3 +163,44 @@ class AbstractCamera(ABC):
     def set_exposure_us(self, us):
         """Set the exposure time in microseconds."""
         self.exposure_us = us
+    
+    def get_next_capture_filename(self):
+        """Generate the next sequential capture filename.
+        
+        Returns:
+            str: Full path to the next capture file (e.g., 'captures/capture_0001.jpg')
+        """
+        import os
+        import re
+        
+        # Ensure capture_dir is absolute
+        capture_dir = self.capture_dir
+        if not os.path.isabs(capture_dir):
+            capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+        
+        # Ensure directory exists
+        os.makedirs(capture_dir, exist_ok=True)
+        
+        # Pattern to match capture_XXXX.jpg files (both old timestamp and new sequential)
+        pattern = re.compile(r'^capture_(\d+)\.jpg$', re.IGNORECASE)
+        
+        # Find all existing capture files and extract their numbers
+        # Only consider numbers < 10000 to ignore old timestamp-based files
+        max_num = 0
+        try:
+            for filename in os.listdir(capture_dir):
+                match = pattern.match(filename)
+                if match:
+                    num = int(match.group(1))
+                    # Only consider sequential numbers (ignore timestamps which are > 10000)
+                    if num < 10000:
+                        max_num = max(max_num, num)
+        except (OSError, ValueError):
+            # If directory doesn't exist or error reading, start from 0
+            pass
+        
+        # Generate next sequential number (4 digits with leading zeros)
+        next_num = max_num + 1
+        filename = f"capture_{next_num:04d}.jpg"
+        
+        return os.path.join(capture_dir, filename)

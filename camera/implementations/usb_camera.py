@@ -496,8 +496,8 @@ class USBCamera(AbstractCamera):
             if self.use_digital_gain and self.digital_gain > 1.0:
                 frame = frame * self.digital_gain
             
-            # Save the image
-            filename = f"{self.capture_dir}/capture_{int(time.time())}.jpg"
+            # Save the image with sequential numbering
+            filename = self.get_next_capture_filename()
             cv2.imwrite(filename, frame)
             
             self.capture_status = "Capture complete"

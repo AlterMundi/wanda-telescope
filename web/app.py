@@ -147,6 +147,7 @@ class WandaApp:
 
         # Captures
         self.app.route("/api/captures", methods=["GET"])(self._list_captures)
+        self.app.route("/api/captures/<path:filename>", methods=["GET"])(self._serve_capture)
 
     # ------------------------------------------------------------------
     # Camera handlers
@@ -439,6 +440,11 @@ class WandaApp:
     # ------------------------------------------------------------------
     def _list_captures(self):
         capture_dir = getattr(self.camera, "capture_dir", "captures")
+        
+        # Convert relative path to absolute path
+        if not os.path.isabs(capture_dir):
+            capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+        
         try:
             files = sorted(os.listdir(capture_dir))
         except FileNotFoundError:
@@ -452,6 +458,33 @@ class WandaApp:
             )
 
         return success_response({"files": files}, message="Capture list retrieved")
+
+    def _serve_capture(self, filename):
+        """Serve a single capture file."""
+        from flask import send_from_directory
+        capture_dir = getattr(self.camera, "capture_dir", "captures")
+        
+        # Convert relative path to absolute path
+        if not os.path.isabs(capture_dir):
+            # If relative, resolve it relative to the application root
+            # Assuming the app runs from /home/admin/wanda-telescope
+            capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+        
+        try:
+            return send_from_directory(capture_dir, filename)
+        except FileNotFoundError:
+            return error_response(
+                code="FILE_NOT_FOUND",
+                message=f"Capture file not found: {filename}",
+                http_status=404,
+            )
+        except Exception as exc:
+            logger.exception("Failed to serve capture file")
+            return error_response(
+                code="SERVE_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
 
     # ------------------------------------------------------------------
     # Video feed (unchanged behaviour)

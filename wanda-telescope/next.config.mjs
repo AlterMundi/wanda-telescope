@@ -14,6 +14,10 @@ const nextConfig = {
         source: "/socket.io/:path*",
         destination: "http://127.0.0.1:5000/socket.io/:path*",
       },
+      {
+        source: "/captures/:path*",
+        destination: "http://127.0.0.1:5000/api/captures/:path*",
+      },
     ]
   },
 }

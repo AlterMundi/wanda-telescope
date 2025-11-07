@@ -620,8 +620,8 @@ class PiCamera(AbstractCamera):
         try:
             self.capture_status = "Capturing..."
             
-            # Create filename
-            filename = f"{self.capture_dir}/capture_{int(time.time())}.jpg"
+            # Create filename with sequential numbering
+            filename = self.get_next_capture_filename()
             
             # Capture the image
             self.capture_file(filename)

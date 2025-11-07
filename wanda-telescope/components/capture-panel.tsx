@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Circle, Square, Download, ImageIcon, RefreshCw } from "lucide-react"
+import { Circle, Square, Eye, ImageIcon, RefreshCw, X } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { useWebSocket } from "@/lib/hooks/useWebSocket"
 import { ApiClientError, listCaptures, triggerCapture } from "@/lib/api-client"
@@ -19,6 +18,7 @@ export function CapturePanel() {
   const [captures, setCaptures] = useState<string[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const { socket, isConnected, isReconnecting } = useWebSocket("/ws/camera")
 
@@ -187,12 +187,12 @@ export function CapturePanel() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {captures.slice(0, 20).map((filename) => (
+              {captures.slice(0, 10).map((filename) => (
                 <Card key={filename} className="overflow-hidden">
                   <CardContent className="flex items-center gap-4 p-4">
                     <div className="relative h-16 w-16 overflow-hidden rounded border border-border">
               <Image
-                src={`/api/captures/${encodeURIComponent(filename)}`}
+                src={`/captures/${encodeURIComponent(filename)}`}
                 alt={filename}
                 fill
                 className="object-cover"
@@ -204,11 +204,13 @@ export function CapturePanel() {
                       <p className="truncate text-sm font-medium">{filename}</p>
                       <p className="text-xs text-muted-foreground">Stored in /captures</p>
                     </div>
-                    <Button variant="secondary" size="sm" asChild>
-                      <Link href={`/api/captures/${encodeURIComponent(filename)}`} target="_blank">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </Link>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={() => setPreviewImage(filename)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Preview
                     </Button>
                   </CardContent>
                 </Card>
@@ -217,6 +219,30 @@ export function CapturePanel() {
           )}
         </div>
       </div>
+
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button 
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors"
+            onClick={() => setPreviewImage(null)}
+            aria-label="Close preview"
+          >
+            <X className="h-6 w-6 text-white" />
+          </button>
+          <Image
+            src={`/captures/${encodeURIComponent(previewImage)}`}
+            alt={previewImage}
+            width={1920}
+            height={1080}
+            className="max-h-[90vh] max-w-[90vw] object-contain"
+            unoptimized
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }
