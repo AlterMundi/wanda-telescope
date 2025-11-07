@@ -12,16 +12,21 @@ import {
   getSessionStatus,
   startSession,
   stopSession,
+  getSessionConfig,
+  saveSessionConfig,
+  getCameraStatus,
   type SessionStatus,
+  type SessionConfig,
 } from "@/lib/api-client"
 import { useWebSocket } from "@/lib/hooks/useWebSocket"
-import { Clock, Play, Square, CalendarCheck, RefreshCw } from "lucide-react"
+import { Clock, Play, Square, CalendarCheck, RefreshCw, Save } from "lucide-react"
 
 interface SessionFormState {
   name: string
   totalImages: number
   enableTracking: boolean
   useCurrentSettings: boolean
+  sessionMode: "rapid" | "timed"
   totalTimeHours: number
 }
 
@@ -30,6 +35,7 @@ const DEFAULT_FORM: SessionFormState = {
   totalImages: 10,
   enableTracking: true,
   useCurrentSettings: true,
+  sessionMode: "timed",
   totalTimeHours: 1,
 }
 
@@ -53,7 +59,10 @@ export function SessionControls() {
   const [form, setForm] = useState<SessionFormState>(DEFAULT_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [validationWarning, setValidationWarning] = useState<string | null>(null)
+  const [cameraExposure, setCameraExposure] = useState<number>(1.0)
   const { socket, isConnected, isReconnecting } = useWebSocket("/ws/session")
 
   const connectionLabel = useMemo(() => {
@@ -83,6 +92,61 @@ export function SessionControls() {
   }, [syncStatus])
 
   useEffect(() => {
+    loadSessionConfig()
+    loadCameraExposure()
+  }, [])
+
+  const loadSessionConfig = useCallback(async () => {
+    try {
+      const config = await getSessionConfig()
+      if (config && Object.keys(config).length > 0) {
+        setForm({
+          name: config.name || DEFAULT_FORM.name,
+          totalImages: config.totalImages || DEFAULT_FORM.totalImages,
+          enableTracking: config.enableTracking ?? DEFAULT_FORM.enableTracking,
+          useCurrentSettings: config.useCurrentSettings ?? DEFAULT_FORM.useCurrentSettings,
+          sessionMode: config.sessionMode || DEFAULT_FORM.sessionMode,
+          totalTimeHours: config.totalTimeHours || DEFAULT_FORM.totalTimeHours,
+        })
+      }
+    } catch (error) {
+      // Config doesn't exist yet, use defaults
+      console.debug("No saved session config found")
+    }
+  }, [])
+
+  const loadCameraExposure = useCallback(async () => {
+    try {
+      const cameraStatus = await getCameraStatus()
+      if (typeof cameraStatus.exposure_seconds === "number") {
+        setCameraExposure(cameraStatus.exposure_seconds)
+      }
+    } catch (error) {
+      console.error("Failed to load camera exposure", error)
+    }
+  }, [])
+
+  const validateTimedMode = useCallback(() => {
+    if (form.sessionMode === "timed") {
+      const totalDurationSeconds = form.totalTimeHours * 3600
+      const minRequiredSeconds = form.totalImages * cameraExposure
+      if (totalDurationSeconds < minRequiredSeconds) {
+        const minHours = minRequiredSeconds / 3600
+        setValidationWarning(
+          `Duration too short! Minimum ${minHours.toFixed(2)} hours required for ${form.totalImages} images with ${cameraExposure.toFixed(1)}s exposure each.`
+        )
+        return false
+      }
+    }
+    setValidationWarning(null)
+    return true
+  }, [form.sessionMode, form.totalTimeHours, form.totalImages, cameraExposure])
+
+  useEffect(() => {
+    validateTimedMode()
+  }, [validateTimedMode])
+
+  useEffect(() => {
     if (!socket) return
 
     const handleStatus = (payload: SessionStatus) => {
@@ -105,7 +169,11 @@ export function SessionControls() {
     socket.on("status", handleStatus)
     socket.on("session_start", () => handleEvent({ active: true }))
     socket.on("session_progress", handleEvent)
-    socket.on("session_complete", () => handleEvent({ active: false }))
+    socket.on("session_complete", (payload: Partial<SessionStatus>) => {
+      handleEvent({ active: false, ...payload })
+      // Also refresh status to get final state
+      syncStatus()
+    })
     socket.on("session_stop", () => handleEvent({ active: false }))
     const handleError = (payload: { error?: string }) => {
       setErrorMessage(payload.error ?? "Session error")
@@ -131,7 +199,36 @@ export function SessionControls() {
     }))
   }
 
+  const handleSaveConfig = useCallback(async () => {
+    setIsSaving(true)
+    setErrorMessage(null)
+    try {
+      const config: SessionConfig = {
+        name: form.name,
+        totalImages: form.totalImages,
+        enableTracking: form.enableTracking,
+        useCurrentSettings: form.useCurrentSettings,
+        sessionMode: form.sessionMode,
+        totalTimeHours: form.sessionMode === "timed" ? form.totalTimeHours : null,
+      }
+      await saveSessionConfig(config)
+      // Show success briefly (could use a toast library if available)
+      setErrorMessage(null)
+    } catch (error) {
+      console.error("Failed to save session config", error)
+      const message = error instanceof ApiClientError ? error.message : "Failed to save session config."
+      setErrorMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [form])
+
   const handleStartSession = useCallback(async () => {
+    if (!validateTimedMode()) {
+      setErrorMessage("Please fix validation errors before starting session.")
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage(null)
     try {
@@ -140,7 +237,7 @@ export function SessionControls() {
         total_images: form.totalImages,
         enable_tracking: form.enableTracking,
         use_current_settings: form.useCurrentSettings,
-        total_time_hours: form.totalTimeHours,
+        total_time_hours: form.sessionMode === "rapid" ? null : form.totalTimeHours,
       })
     } catch (error) {
       console.error("Failed to start session", error)
@@ -149,7 +246,7 @@ export function SessionControls() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [form])
+  }, [form, validateTimedMode])
 
   const handleStopSession = useCallback(async () => {
     setIsSubmitting(true)
@@ -208,28 +305,49 @@ export function SessionControls() {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-3">
+            <Label className="text-sm">Session Mode</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={form.sessionMode === "rapid" ? "default" : "outline"}
+                onClick={() => handleInputChange("sessionMode")("rapid")}
+                className="flex-1"
+              >
+                Rapid Mode
+              </Button>
+              <Button
+                type="button"
+                variant={form.sessionMode === "timed" ? "default" : "outline"}
+                onClick={() => handleInputChange("sessionMode")("timed")}
+                className="flex-1"
+              >
+                Timed Mode
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {form.sessionMode === "rapid"
+                ? "Captures images as fast as possible"
+                : "Distributes images evenly over specified duration"}
+            </p>
+          </div>
+
+          {form.sessionMode === "timed" && (
             <div className="space-y-3">
               <Label className="text-sm">Total Duration (hours)</Label>
               <Slider
                 value={[form.totalTimeHours]}
-                min={0.5}
+                min={0.1}
                 max={12}
-                step={0.5}
+                step={0.1}
                 onValueChange={(value) => handleInputChange("totalTimeHours")(Number(value[0].toFixed(1)))}
               />
               <p className="text-xs text-muted-foreground">Planned runtime: {form.totalTimeHours.toFixed(1)} hours</p>
+              {validationWarning && (
+                <p className="text-xs text-destructive">{validationWarning}</p>
+              )}
             </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm">Notes</Label>
-              <textarea
-                placeholder="Objects, filters, or instructions"
-                rows={3}
-                className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
-          </div>
+          )}
 
           <div className="grid gap-3 md:grid-cols-2">
             <Button
@@ -249,7 +367,7 @@ export function SessionControls() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleStartSession} disabled={isSubmitting || active || !isConnected}>
+            <Button onClick={handleStartSession} disabled={isSubmitting || active || !isConnected || !!validationWarning}>
               <Play className="mr-2 h-4 w-4" /> Start Session
             </Button>
             <Button
@@ -258,6 +376,13 @@ export function SessionControls() {
               disabled={isSubmitting || !active}
             >
               <Square className="mr-2 h-4 w-4" /> Stop Session
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleSaveConfig}
+              disabled={isSaving}
+            >
+              <Save className={`mr-2 h-4 w-4 ${isSaving ? "animate-spin" : ""}`} /> Save Settings
             </Button>
             <Button variant="ghost" onClick={syncStatus} disabled={isRefreshing}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} /> Refresh

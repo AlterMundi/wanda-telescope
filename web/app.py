@@ -4,9 +4,11 @@ Provides a REST API, MJPEG video feed, and Socket.IO for the Next.js frontend.
 """
 import concurrent.futures
 import eventlet
+import json
 import logging
 import os
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
 from flask import Flask, Response, request
@@ -144,9 +146,12 @@ class WandaApp:
         self.app.route("/api/session/status", methods=["GET"])(self._session_status)
         self.app.route("/api/session/start", methods=["POST"])(self._start_session)
         self.app.route("/api/session/stop", methods=["POST"])(self._stop_session)
+        self.app.route("/api/session/config", methods=["GET"])(self._get_session_config)
+        self.app.route("/api/session/config", methods=["POST"])(self._save_session_config)
 
         # Captures
         self.app.route("/api/captures", methods=["GET"])(self._list_captures)
+        self.app.route("/api/captures/folders", methods=["GET"])(self._list_capture_folders)
         self.app.route("/api/captures/<path:filename>", methods=["GET"])(self._serve_capture)
 
     # ------------------------------------------------------------------
@@ -334,7 +339,19 @@ class WandaApp:
     def _session_status(self):
         try:
             status = self.session_controller.get_session_status()
-            return success_response(status, message="Session status retrieved")
+            # Transform backend format to frontend format
+            frontend_status = {
+                "active": status.get("running", False),
+                "name": status.get("name", ""),
+                "total_images": status.get("total_images", 0),
+                "captured_images": status.get("images_captured", 0),
+                "remaining_time": self._calculate_remaining_time(status),
+            }
+            # Include any additional fields
+            for key, value in status.items():
+                if key not in frontend_status:
+                    frontend_status[key] = value
+            return success_response(frontend_status, message="Session status retrieved")
         except Exception as exc:
             logger.exception("Failed to retrieve session status")
             return error_response(
@@ -435,6 +452,105 @@ class WandaApp:
                 http_status=500,
             )
 
+    def _get_session_config(self):
+        """Get saved session configuration."""
+        try:
+            capture_dir = getattr(self.camera, "capture_dir", "captures")
+            if not os.path.isabs(capture_dir):
+                capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+            
+            config_path = os.path.join(capture_dir, "session_config.json")
+            
+            if not os.path.exists(config_path):
+                return success_response({}, message="No saved session config")
+            
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            
+            return success_response(config, message="Session config retrieved")
+        except json.JSONDecodeError as exc:
+            logger.exception("Failed to parse session config")
+            return error_response(
+                code="CONFIG_PARSE_ERROR",
+                message=f"Invalid config file format: {str(exc)}",
+                http_status=500,
+            )
+        except Exception as exc:
+            logger.exception("Failed to retrieve session config")
+            return error_response(
+                code="CONFIG_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+    def _save_session_config(self):
+        """Save session configuration."""
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return error_response(
+                code="INVALID_REQUEST",
+                message="Request body must be valid JSON",
+                http_status=400,
+            )
+
+        try:
+            capture_dir = getattr(self.camera, "capture_dir", "captures")
+            if not os.path.isabs(capture_dir):
+                capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+            
+            # Ensure capture directory exists
+            os.makedirs(capture_dir, exist_ok=True)
+            
+            config_path = os.path.join(capture_dir, "session_config.json")
+            
+            # Validate and sanitize config data
+            config = {
+                "name": str(payload.get("name", "")).strip(),
+                "totalImages": int(payload.get("totalImages", 10)),
+                "enableTracking": bool(payload.get("enableTracking", False)),
+                "useCurrentSettings": bool(payload.get("useCurrentSettings", True)),
+                "sessionMode": str(payload.get("sessionMode", "timed")),
+                "totalTimeHours": payload.get("totalTimeHours"),
+            }
+            
+            # Validate sessionMode
+            if config["sessionMode"] not in ["rapid", "timed"]:
+                raise ValueError("sessionMode must be 'rapid' or 'timed'")
+            
+            # Validate totalImages
+            if config["totalImages"] <= 0:
+                raise ValueError("totalImages must be greater than 0")
+            
+            # Validate totalTimeHours for timed mode
+            if config["sessionMode"] == "timed":
+                if config["totalTimeHours"] is None:
+                    raise ValueError("totalTimeHours is required for timed mode")
+                total_time_hours = float(config["totalTimeHours"])
+                if total_time_hours <= 0:
+                    raise ValueError("totalTimeHours must be greater than 0")
+                config["totalTimeHours"] = total_time_hours
+            else:
+                config["totalTimeHours"] = None
+            
+            # Save config to file
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+            
+            return success_response(config, message="Session config saved")
+        except ValueError as validation_error:
+            return error_response(
+                code="VALIDATION_ERROR",
+                message=str(validation_error),
+                http_status=400,
+            )
+        except Exception as exc:
+            logger.exception("Failed to save session config")
+            return error_response(
+                code="CONFIG_SAVE_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
     # ------------------------------------------------------------------
     # Capture listing
     # ------------------------------------------------------------------
@@ -445,8 +561,28 @@ class WandaApp:
         if not os.path.isabs(capture_dir):
             capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
         
+        # Check for folder query parameter
+        folder = request.args.get("folder")
+        if folder:
+            # Sanitize folder name to prevent directory traversal
+            folder = os.path.basename(folder)
+            capture_dir = os.path.join(capture_dir, folder)
+        
         try:
-            files = sorted(os.listdir(capture_dir))
+            if not os.path.exists(capture_dir):
+                files = []
+            else:
+                # List only files, not directories, sorted by modification time (newest first)
+                files_with_time = []
+                for f in os.listdir(capture_dir):
+                    file_path = os.path.join(capture_dir, f)
+                    if os.path.isfile(file_path):
+                        mtime = os.path.getmtime(file_path)
+                        files_with_time.append((f, mtime))
+                
+                # Sort by modification time descending (newest first)
+                files_with_time.sort(key=lambda x: x[1], reverse=True)
+                files = [f[0] for f in files_with_time]
         except FileNotFoundError:
             files = []
         except Exception as exc:
@@ -459,6 +595,34 @@ class WandaApp:
 
         return success_response({"files": files}, message="Capture list retrieved")
 
+    def _list_capture_folders(self):
+        """List all sub-folders in the captures directory."""
+        capture_dir = getattr(self.camera, "capture_dir", "captures")
+        
+        # Convert relative path to absolute path
+        if not os.path.isabs(capture_dir):
+            capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+        
+        try:
+            if not os.path.exists(capture_dir):
+                folders = []
+            else:
+                # List only directories, not files
+                folders = [
+                    f for f in os.listdir(capture_dir)
+                    if os.path.isdir(os.path.join(capture_dir, f))
+                ]
+                folders = sorted(folders)
+        except Exception as exc:
+            logger.exception("Failed to list capture folders")
+            return error_response(
+                code="FOLDER_LIST_ERROR",
+                message=str(exc),
+                http_status=500,
+            )
+
+        return success_response({"folders": folders}, message="Capture folders retrieved")
+
     def _serve_capture(self, filename):
         """Serve a single capture file."""
         from flask import send_from_directory
@@ -469,6 +633,13 @@ class WandaApp:
             # If relative, resolve it relative to the application root
             # Assuming the app runs from /home/admin/wanda-telescope
             capture_dir = os.path.abspath(os.path.expanduser(capture_dir))
+        
+        # Check if filename contains a folder path (e.g., "session_name/image_0001.jpg")
+        if "/" in filename:
+            parts = filename.split("/", 1)
+            folder = os.path.basename(parts[0])  # Sanitize folder name
+            filename = parts[1]
+            capture_dir = os.path.join(capture_dir, folder)
         
         try:
             return send_from_directory(capture_dir, filename)
@@ -526,6 +697,21 @@ class WandaApp:
                 logger.warning("Camera call %s failed: %s", attr, exc)
         return default
 
+    def _calculate_remaining_time(self, status: Dict[str, Any]) -> float:
+        """Calculate remaining time in hours for the session."""
+        total_time_hours = status.get("total_time_hours")
+        if not total_time_hours or not status.get("start_time"):
+            return 0.0
+        
+        try:
+            start_time = datetime.fromisoformat(status["start_time"])
+            elapsed_seconds = (datetime.now() - start_time).total_seconds()
+            elapsed_hours = elapsed_seconds / 3600
+            remaining = max(0.0, total_time_hours - elapsed_hours)
+            return remaining
+        except (ValueError, KeyError, TypeError):
+            return 0.0
+
     @staticmethod
     def _normalize_direction(direction: Any) -> Optional[bool]:
         if direction is None:
@@ -541,6 +727,16 @@ class WandaApp:
         return None
 
     def _handle_session_event(self, event_name: str, payload: Dict[str, Any]):
+        # Transform payload format for frontend compatibility
+        if isinstance(payload, dict) and "running" in payload:
+            transformed_payload = payload.copy()
+            transformed_payload["active"] = payload.get("running", False)
+            if "images_captured" in payload:
+                transformed_payload["captured_images"] = payload["images_captured"]
+            if "remaining_time" not in transformed_payload:
+                transformed_payload["remaining_time"] = self._calculate_remaining_time(payload)
+            payload = transformed_payload
+        
         if event_name == "session_progress":
             broadcast_session_event("session_progress", payload)
         elif event_name == "session_complete":

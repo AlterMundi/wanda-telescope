@@ -193,6 +193,31 @@ export async function stopSession() {
   })
 }
 
-export async function listCaptures() {
-  return apiCall<{ files: string[] }>("/captures")
+export async function listCaptures(folder?: string | null) {
+  const url = folder ? `/captures?folder=${encodeURIComponent(folder)}` : "/captures"
+  return apiCall<{ files: string[] }>(url)
+}
+
+export async function listCaptureFolders() {
+  return apiCall<{ folders: string[] }>("/captures/folders")
+}
+
+export interface SessionConfig {
+  name: string
+  totalImages: number
+  enableTracking: boolean
+  useCurrentSettings: boolean
+  sessionMode: "rapid" | "timed"
+  totalTimeHours: number | null
+}
+
+export async function getSessionConfig() {
+  return apiCall<SessionConfig>("/session/config")
+}
+
+export async function saveSessionConfig(config: SessionConfig) {
+  return apiCall<SessionConfig>("/session/config", {
+    method: "POST",
+    body: config,
+  })
 }

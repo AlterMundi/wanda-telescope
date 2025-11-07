@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Circle, Square, Eye, ImageIcon, RefreshCw, X } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { useWebSocket } from "@/lib/hooks/useWebSocket"
-import { ApiClientError, listCaptures, triggerCapture } from "@/lib/api-client"
+import { ApiClientError, listCaptures, listCaptureFolders, triggerCapture } from "@/lib/api-client"
 
 export function CapturePanel() {
   const [isCapturing, setIsCapturing] = useState(false)
@@ -19,6 +19,8 @@ export function CapturePanel() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
+  const [availableFolders, setAvailableFolders] = useState<string[]>([])
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const { socket, isConnected, isReconnecting } = useWebSocket("/ws/camera")
 
@@ -28,11 +30,21 @@ export function CapturePanel() {
     return "Realtime updates paused"
   }, [isConnected, isReconnecting])
 
+  const fetchFolders = useCallback(async () => {
+    try {
+      const data = await listCaptureFolders()
+      setAvailableFolders(data.folders)
+    } catch (error) {
+      console.error("Failed to load capture folders", error)
+      setAvailableFolders([])
+    }
+  }, [])
+
   const fetchCaptures = useCallback(async () => {
     setIsRefreshing(true)
     setErrorMessage(null)
     try {
-      const data = await listCaptures()
+      const data = await listCaptures(selectedFolder)
       setCaptures(data.files)
     } catch (error) {
       console.error("Failed to load captures", error)
@@ -44,7 +56,7 @@ export function CapturePanel() {
     } finally {
       setIsRefreshing(false)
     }
-  }, [])
+  }, [selectedFolder])
 
   const handleManualCapture = useCallback(async () => {
     try {
@@ -58,6 +70,10 @@ export function CapturePanel() {
       setErrorMessage(message)
     }
   }, [])
+
+  useEffect(() => {
+    fetchFolders()
+  }, [fetchFolders])
 
   useEffect(() => {
     fetchCaptures()
@@ -173,10 +189,34 @@ export function CapturePanel() {
             <h3 className="text-sm font-semibold">Recent Captures</h3>
             <p className="text-xs text-muted-foreground">Latest files saved to the Raspberry Pi.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={fetchCaptures} disabled={isRefreshing}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {availableFolders.length > 0 && (
+              <select
+                value={selectedFolder || ""}
+                onChange={(e) => setSelectedFolder(e.target.value || null)}
+                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">All Captures</option>
+                {availableFolders.map((folder) => (
+                  <option key={folder} value={folder}>
+                    {folder}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                fetchFolders()
+                fetchCaptures()
+              }} 
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 max-h-[600px] overflow-y-auto p-6">
@@ -192,7 +232,7 @@ export function CapturePanel() {
                   <CardContent className="flex items-center gap-4 p-4">
                     <div className="relative h-16 w-16 overflow-hidden rounded border border-border">
               <Image
-                src={`/captures/${encodeURIComponent(filename)}`}
+                src={`/captures/${selectedFolder ? `${encodeURIComponent(selectedFolder)}/` : ""}${encodeURIComponent(filename)}`}
                 alt={filename}
                 fill
                 className="object-cover"
@@ -202,12 +242,14 @@ export function CapturePanel() {
                     </div>
                     <div className="flex-1 truncate">
                       <p className="truncate text-sm font-medium">{filename}</p>
-                      <p className="text-xs text-muted-foreground">Stored in /captures</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedFolder ? `Stored in /captures/${selectedFolder}` : "Stored in /captures"}
+                      </p>
                     </div>
                     <Button 
                       variant="secondary" 
                       size="sm" 
-                      onClick={() => setPreviewImage(filename)}
+                      onClick={() => setPreviewImage(selectedFolder ? `${selectedFolder}/${filename}` : filename)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       Preview

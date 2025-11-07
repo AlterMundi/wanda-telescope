@@ -111,7 +111,9 @@ class TestRoutes:
             "/api/session/start",
             "/api/session/stop",
             "/api/session/status",
+            "/api/session/config",
             "/api/captures",
+            "/api/captures/folders",
         }
         assert expected_routes.issubset(routes)
 
@@ -318,12 +320,132 @@ class TestSessionEndpoints:
         assert body["success"] is False
         assert body["code"] == "SESSION_STOP_FAILED"
 
+    def test_session_start_rapid_mode(self, client, app_instance):
+        """Test starting a session in rapid mode (no time limit)."""
+        payload = {
+            "name": "Rapid Session",
+            "total_images": 5,
+            "use_current_settings": True,
+            "enable_tracking": False,
+            "total_time_hours": None,
+        }
+
+        response = client.post("/api/session/start", json=payload)
+        body = response.get_json()
+
+        assert response.status_code == 200
+        assert body["success"] is True
+        app_instance.session_controller.start_session.assert_called_once_with(
+            name="Rapid Session",
+            total_images=5,
+            use_current_settings=True,
+            enable_tracking=False,
+            total_time_hours=None,
+        )
+
+    def test_session_config_get_not_exists(self, client, app_instance):
+        """Test getting session config when it doesn't exist."""
+        with patch("web.app.os.path.exists", return_value=False):
+            response = client.get("/api/session/config")
+            body = response.get_json()
+
+            assert response.status_code == 200
+            assert body["success"] is True
+            assert body["data"] == {}
+
+    def test_session_config_get_exists(self, client, app_instance):
+        """Test getting session config when it exists."""
+        config_data = {
+            "name": "Saved Session",
+            "totalImages": 20,
+            "enableTracking": True,
+            "useCurrentSettings": True,
+            "sessionMode": "timed",
+            "totalTimeHours": 2.0,
+        }
+        with patch("web.app.os.path.exists", return_value=True), \
+             patch("builtins.open", create=True) as mock_open:
+            import io
+            mock_open.return_value.__enter__.return_value = io.StringIO(json.dumps(config_data))
+            response = client.get("/api/session/config")
+            body = response.get_json()
+
+            assert response.status_code == 200
+            assert body["success"] is True
+            assert body["data"]["name"] == "Saved Session"
+            assert body["data"]["totalImages"] == 20
+
+    def test_session_config_save_success(self, client, app_instance):
+        """Test saving session config."""
+        payload = {
+            "name": "Test Session",
+            "totalImages": 15,
+            "enableTracking": False,
+            "useCurrentSettings": True,
+            "sessionMode": "rapid",
+            "totalTimeHours": None,
+        }
+
+        with patch("web.app.os.makedirs"), \
+             patch("builtins.open", create=True) as mock_open:
+            import io
+            mock_file = io.StringIO()
+            mock_open.return_value.__enter__.return_value = mock_file
+            response = client.post("/api/session/config", json=payload)
+            body = response.get_json()
+
+            assert response.status_code == 200
+            assert body["success"] is True
+            assert body["data"]["name"] == "Test Session"
+            assert body["data"]["sessionMode"] == "rapid"
+            assert body["data"]["totalTimeHours"] is None
+
+    def test_session_config_save_invalid_mode(self, client, app_instance):
+        """Test saving session config with invalid mode."""
+        payload = {
+            "name": "Test Session",
+            "totalImages": 15,
+            "enableTracking": False,
+            "useCurrentSettings": True,
+            "sessionMode": "invalid",
+            "totalTimeHours": None,
+        }
+
+        with patch("web.app.os.makedirs"):
+            response = client.post("/api/session/config", json=payload)
+            body = response.get_json()
+
+            assert response.status_code == 400
+            assert body["success"] is False
+            assert body["code"] == "VALIDATION_ERROR"
+
+    def test_session_config_save_timed_mode_missing_hours(self, client, app_instance):
+        """Test saving session config in timed mode without hours."""
+        payload = {
+            "name": "Test Session",
+            "totalImages": 15,
+            "enableTracking": False,
+            "useCurrentSettings": True,
+            "sessionMode": "timed",
+            "totalTimeHours": None,
+        }
+
+        with patch("web.app.os.makedirs"):
+            response = client.post("/api/session/config", json=payload)
+            body = response.get_json()
+
+            assert response.status_code == 400
+            assert body["success"] is False
+            assert body["code"] == "VALIDATION_ERROR"
+
 
 class TestCaptureListing:
     """Captured images listing endpoint tests."""
 
     def test_captures_list_success(self, client, app_instance):
-        with patch("web.app.os.listdir", return_value=["img1.jpg", "img2.png"]):
+        with patch("web.app.os.path.exists", return_value=True), \
+             patch("web.app.os.path.isfile", return_value=True), \
+             patch("web.app.os.listdir", return_value=["img1.jpg", "img2.png"]):
             response = client.get("/api/captures")
 
         body = response.get_json()
@@ -338,6 +460,44 @@ class TestCaptureListing:
         body = response.get_json()
         assert response.status_code == 200
         assert body["data"]["files"] == []
+
+    def test_captures_list_with_folder(self, client, app_instance):
+        """Test listing captures from a specific folder."""
+        with patch("web.app.os.path.exists", return_value=True), \
+             patch("web.app.os.path.isfile", side_effect=lambda p: p.endswith(".jpg")), \
+             patch("web.app.os.listdir", return_value=["img1.jpg", "img2.jpg", "subfolder"]):
+            response = client.get("/api/captures?folder=test_session")
+
+        body = response.get_json()
+        assert response.status_code == 200
+        assert body["success"] is True
+        assert "img1.jpg" in body["data"]["files"]
+        assert "img2.jpg" in body["data"]["files"]
+        assert "subfolder" not in body["data"]["files"]  # Should filter out directories
+
+    def test_captures_folders_list_success(self, client, app_instance):
+        """Test listing capture folders."""
+        with patch("web.app.os.path.exists", return_value=True), \
+             patch("web.app.os.path.isdir", side_effect=lambda p: "session" in p), \
+             patch("web.app.os.listdir", return_value=["session1", "session2", "file.jpg"]):
+            response = client.get("/api/captures/folders")
+
+        body = response.get_json()
+        assert response.status_code == 200
+        assert body["success"] is True
+        assert "session1" in body["data"]["folders"]
+        assert "session2" in body["data"]["folders"]
+        assert "file.jpg" not in body["data"]["folders"]  # Should filter out files
+
+    def test_captures_folders_empty(self, client, app_instance):
+        """Test listing folders when none exist."""
+        with patch("web.app.os.path.exists", return_value=False):
+            response = client.get("/api/captures/folders")
+
+        body = response.get_json()
+        assert response.status_code == 200
+        assert body["success"] is True
+        assert body["data"]["folders"] == []
 
 
 class TestVideoFeed:
