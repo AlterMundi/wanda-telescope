@@ -218,6 +218,6 @@ export async function getSessionConfig() {
 export async function saveSessionConfig(config: SessionConfig) {
   return apiCall<SessionConfig>("/session/config", {
     method: "POST",
-    body: config,
+    body: config as unknown as Record<string, unknown>,
   })
 }

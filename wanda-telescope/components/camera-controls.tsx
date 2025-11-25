@@ -35,7 +35,7 @@ interface CaptureEventPayload {
 export function CameraControls() {
   const [exposure, setExposure] = useState([1.0])
   const [iso, setIso] = useState([800])
-  const [intensity, setIntensity] = useState([1.0])
+  const [_intensity, setIntensity] = useState([1.0])
   const [nightVision, setNightVision] = useState(false)
   const [saveRaw, setSaveRaw] = useState(false)
   const [captureStatus, setCaptureStatus] = useState("Idle")
@@ -128,7 +128,7 @@ export function CameraControls() {
     }
   }
 
-  const handleIntensityChange = async (value: number[]) => {
+  const _handleIntensityChange = async (value: number[]) => {
     setIntensity(value)
     try {
       await updateCameraSettings({ night_vision_intensity: value[0] })

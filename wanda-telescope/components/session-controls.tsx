@@ -109,7 +109,7 @@ export function SessionControls() {
           totalTimeHours: config.totalTimeHours || DEFAULT_FORM.totalTimeHours,
         })
       }
-    } catch (error) {
+    } catch {
       // Config doesn't exist yet, use defaults
       console.debug("No saved session config found")
     }
