@@ -157,20 +157,25 @@ class PiCamera(AbstractCamera):
     def create_preview_configuration(self, main=None):
         """Create preview configuration."""
         if not main:
-            main = {"size": (1440, 1080), "format": "BGR888"}  # Explicit format for consistency
+            # NOTE: picamera2 format naming is counterintuitive:
+            # - "RGB888" outputs BGR bytes in memory (what OpenCV expects)
+            # - "BGR888" outputs RGB bytes in memory (incompatible with OpenCV)
+            # We use RGB888 so cv2.imencode receives BGR data without conversion.
+            main = {"size": (1440, 1080), "format": "RGB888"}
         config = self.camera.create_preview_configuration(main=main)
 
         # Inject white balance controls for better color in preview
         try:
             controls = config.get("controls", {})
             controls.setdefault("AwbEnable", True)
-            # Use Auto white balance instead of Tungsten to fix blue tint
+            # Use Auto white balance for proper color correction
             controls.setdefault("AwbMode", libcamera.controls.AwbModeEnum.Auto)
-            # Add color correction controls
-            controls.setdefault("ColourGains", (1.0, 1.0))  # Red, Blue gains
+            # Do NOT set ColourGains - let AWB determine optimal red/blue gains
+            # Setting ColourGains to (1.0, 1.0) prevents AWB from compensating
+            # for the IMX477's higher green sensitivity, especially in low light
             controls.setdefault("Saturation", 1.0)  # Normal saturation
             config["controls"] = controls
-            logger.info("Applied color correction controls to preview config")
+            logger.info("Applied AWB controls to preview config")
         except Exception as e:
             logger.warning(f"Could not set white balance controls on preview config: {e}")
 
@@ -179,7 +184,8 @@ class PiCamera(AbstractCamera):
     def create_still_configuration(self, main=None, raw=None):
         """Create still image configuration."""
         if not main:
-            main = {"size": (4056, 3040)}  # Full resolution
+            # RGB888 outputs BGR bytes - see create_preview_configuration for explanation
+            main = {"size": (4056, 3040), "format": "RGB888"}
         config = {"main": main}
         if raw and self.save_raw:
             config["raw"] = {"size": (4056, 3040)}
@@ -333,15 +339,17 @@ class PiCamera(AbstractCamera):
                 self.camera.start()
                 self.started = True
 
+                # Allow AWB to converge before capture (critical for correct colors)
+                time.sleep(0.5)
+
                 # Reapply camera settings after reconfiguration
                 self.update_camera_settings()
 
                 # Capture the image using capture_array() to respect exposure settings
                 array = self.camera.capture_array()
 
-                # Convert array to image and save
-                if len(array.shape) == 3 and array.shape[2] == 3:
-                    array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+                # Array is already in BGR format from still config (RGB888 outputs BGR)
+                # No color conversion needed - cv2.imwrite expects BGR
 
                 cv2.imwrite(filename, array)
 
@@ -604,9 +612,8 @@ class PiCamera(AbstractCamera):
                 if self.use_digital_gain and self.digital_gain > 1.0:
                     frame = np.clip(frame * self.digital_gain, 0, 255).astype(np.uint8)
                 
-                # Convert to BGR if needed (picamera2 usually gives RGB)
-                if len(frame.shape) == 3 and frame.shape[2] == 3:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # Frame is already in BGR format from preview config (RGB888 outputs BGR)
+                # No color conversion needed - cv2.imencode expects BGR
                 
                 # Encode to JPEG
                 _, jpeg = cv2.imencode('.jpg', frame)
@@ -666,10 +673,8 @@ class PiCamera(AbstractCamera):
             if abs(actual_us - self.exposure_us) > 1000:  # 1ms tolerance
                 logger.warning(f"Exposure mismatch: requested {self.exposure_us}µs, actual {actual_us}µs")
 
-            # Convert array to image and save
-            # Convert from RGB to BGR for OpenCV
-            if len(image.shape) == 3 and image.shape[2] == 3:
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            # Image is already in BGR format from still config (RGB888 outputs BGR)
+            # No color conversion needed - cv2.imwrite expects BGR
 
             # Save the image
             cv2.imwrite(filename, image)
@@ -685,23 +690,25 @@ class PiCamera(AbstractCamera):
             raise
 
     def apply_color_correction(self):
-        """Apply color correction settings to fix blue tint and improve color accuracy."""
+        """Apply AWB settings for proper color balance."""
         if not self.camera or not self.started:
             return
             
         try:
-            # Apply color correction controls
+            # Apply AWB controls - do NOT set ColourGains manually
+            # AWB will automatically determine optimal red/blue gains
+            # based on lighting conditions (critical for low light)
             controls = {
                 "AwbEnable": True,
                 "AwbMode": libcamera.controls.AwbModeEnum.Auto,
-                "ColourGains": (1.0, 1.0),  # Red, Blue gains - adjust if needed
+                # ColourGains intentionally omitted - let AWB handle it
                 "Saturation": 1.0,  # Normal saturation
                 "Brightness": 0.0,  # No brightness adjustment
                 "Contrast": 1.0,    # Normal contrast
             }
             
             self.camera.set_controls(controls)
-            logger.info("Applied color correction controls to fix blue tint")
+            logger.info("Applied AWB controls for color correction")
             
         except Exception as e:
             logger.warning(f"Could not apply color correction: {e}")
