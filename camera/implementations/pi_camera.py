@@ -157,7 +157,11 @@ class PiCamera(AbstractCamera):
     def create_preview_configuration(self, main=None):
         """Create preview configuration."""
         if not main:
-            main = {"size": (1440, 1080), "format": "BGR888"}  # Explicit format for consistency
+            # NOTE: picamera2 format naming is counterintuitive:
+            # - "RGB888" outputs BGR bytes in memory (what OpenCV expects)
+            # - "BGR888" outputs RGB bytes in memory (incompatible with OpenCV)
+            # We use RGB888 so cv2.imencode receives BGR data without conversion.
+            main = {"size": (1440, 1080), "format": "RGB888"}
         config = self.camera.create_preview_configuration(main=main)
 
         # Inject white balance controls for better color in preview
@@ -180,8 +184,8 @@ class PiCamera(AbstractCamera):
     def create_still_configuration(self, main=None, raw=None):
         """Create still image configuration."""
         if not main:
-            # Use BGR888 format for consistency with preview config
-            main = {"size": (4056, 3040), "format": "BGR888"}
+            # RGB888 outputs BGR bytes - see create_preview_configuration for explanation
+            main = {"size": (4056, 3040), "format": "RGB888"}
         config = {"main": main}
         if raw and self.save_raw:
             config["raw"] = {"size": (4056, 3040)}
@@ -344,7 +348,7 @@ class PiCamera(AbstractCamera):
                 # Capture the image using capture_array() to respect exposure settings
                 array = self.camera.capture_array()
 
-                # Array is already in BGR format from still config (BGR888)
+                # Array is already in BGR format from still config (RGB888 outputs BGR)
                 # No color conversion needed - cv2.imwrite expects BGR
 
                 cv2.imwrite(filename, array)
@@ -608,7 +612,7 @@ class PiCamera(AbstractCamera):
                 if self.use_digital_gain and self.digital_gain > 1.0:
                     frame = np.clip(frame * self.digital_gain, 0, 255).astype(np.uint8)
                 
-                # Frame is already in BGR format from preview config (BGR888)
+                # Frame is already in BGR format from preview config (RGB888 outputs BGR)
                 # No color conversion needed - cv2.imencode expects BGR
                 
                 # Encode to JPEG
@@ -669,7 +673,7 @@ class PiCamera(AbstractCamera):
             if abs(actual_us - self.exposure_us) > 1000:  # 1ms tolerance
                 logger.warning(f"Exposure mismatch: requested {self.exposure_us}µs, actual {actual_us}µs")
 
-            # Image is already in BGR format from still config (BGR888)
+            # Image is already in BGR format from still config (RGB888 outputs BGR)
             # No color conversion needed - cv2.imwrite expects BGR
 
             # Save the image

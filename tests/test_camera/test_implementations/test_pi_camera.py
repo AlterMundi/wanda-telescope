@@ -268,7 +268,7 @@ class TestPiCamera:
 
         result = camera.create_preview_configuration()
 
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'RGB888'})
         assert result == mock_config
 
     @patch('camera.implementations.pi_camera.Picamera2')
@@ -291,7 +291,7 @@ class TestPiCamera:
     def test_create_still_configuration_default(self, mock_picamera2_class):
         """Test create_still_configuration with default parameters."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}}
+        mock_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}}
         mock_camera_instance.create_still_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -299,8 +299,8 @@ class TestPiCamera:
 
         result = camera.create_still_configuration()
 
-        # Now includes explicit BGR888 format for consistency with preview
-        expected_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}}
+        # Now includes explicit RGB888 format for OpenCV compatibility
+        expected_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}}
         mock_camera_instance.create_still_configuration.assert_called_once_with(**expected_config)
         assert result == mock_config
 
@@ -308,7 +308,7 @@ class TestPiCamera:
     def test_create_still_configuration_with_raw(self, mock_picamera2_class):
         """Test create_still_configuration with raw parameter and save_raw enabled."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}, 'raw': {'size': (4056, 3040)}}
+        mock_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}, 'raw': {'size': (4056, 3040)}}
         mock_camera_instance.create_still_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -317,8 +317,8 @@ class TestPiCamera:
 
         result = camera.create_still_configuration(raw={'format': 'RAW'})
 
-        # Now includes explicit BGR888 format for consistency with preview
-        expected_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}, 'raw': {'size': (4056, 3040)}}
+        # Now includes explicit RGB888 format for OpenCV compatibility
+        expected_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}, 'raw': {'size': (4056, 3040)}}
         mock_camera_instance.create_still_configuration.assert_called_once_with(**expected_config)
         assert result == mock_config
 
@@ -326,7 +326,7 @@ class TestPiCamera:
     def test_create_still_configuration_without_raw_when_save_raw_false(self, mock_picamera2_class):
         """Test create_still_configuration ignores raw parameter when save_raw is False."""
         mock_camera_instance = mock_picamera2_class.return_value
-        mock_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}}
+        mock_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}}
         mock_camera_instance.create_still_configuration.return_value = mock_config
 
         camera = PiCamera()
@@ -335,8 +335,8 @@ class TestPiCamera:
 
         result = camera.create_still_configuration(raw={'format': 'RAW'})
 
-        # Now includes explicit BGR888 format for consistency with preview
-        expected_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}}
+        # Now includes explicit RGB888 format for OpenCV compatibility
+        expected_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}}
         mock_camera_instance.create_still_configuration.assert_called_once_with(**expected_config)
         assert result == mock_config
 
@@ -422,7 +422,7 @@ class TestPiCamera:
         camera.start()
 
         # Verify camera operations were called
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'RGB888'})
         mock_camera_instance.configure.assert_called_once_with(mock_config)
         mock_camera_instance.start.assert_called_once()
 
@@ -456,7 +456,7 @@ class TestPiCamera:
 
             # Verify camera operations were called (configure is called twice: once for still, once for preview)
             mock_camera_instance.create_still_configuration.assert_called_once_with(buffer_count=2)
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'RGB888'})
             assert mock_camera_instance.configure.call_count == 2
             mock_camera_instance.start.assert_called_once()
 
@@ -595,7 +595,7 @@ class TestPiCamera:
 
         # Verify preview was restarted
         mock_camera_instance.stop.assert_called_once()
-        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
+        mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'RGB888'})
         mock_camera_instance.configure.assert_called_once_with(mock_preview_config)
         assert mock_camera_instance.start.call_count == 1  # Should be called once to restart preview
 
@@ -613,7 +613,7 @@ class TestPiCamera:
         mock_camera_instance = mock_picamera2_class.return_value
 
         # Mock configurations
-        mock_still_config = {'main': {'size': (4056, 3040), 'format': 'BGR888'}}
+        mock_still_config = {'main': {'size': (4056, 3040), 'format': 'RGB888'}}
         mock_preview_config = {'main': {'size': (1440, 1080)}}
         mock_camera_instance.create_still_configuration.return_value = mock_still_config
         mock_camera_instance.create_preview_configuration.return_value = mock_preview_config
@@ -637,12 +637,12 @@ class TestPiCamera:
             mock_camera_instance.start.assert_called()
             mock_camera_instance.capture_array.assert_called_once()
 
-            # Verify OpenCV operations - no color conversion needed since still config uses BGR888
+            # Verify OpenCV operations - no color conversion needed since still config uses RGB888
             mock_cv2.cvtColor.assert_not_called()
             mock_cv2.imwrite.assert_called_once_with("test.jpg", mock_array)
 
             # Verify preview restart
-            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'BGR888'})
+            mock_camera_instance.create_preview_configuration.assert_called_once_with(main={'size': (1440, 1080), 'format': 'RGB888'})
             mock_camera_instance.configure.assert_any_call(mock_preview_config)
 
             # Verify return value
@@ -1351,7 +1351,7 @@ class TestPiCamera:
             mock_camera_instance.capture_request.assert_called_with(flush=True)
             mock_request.make_array.assert_called_once()
             mock_request.get_metadata.assert_called_once()
-            # No color conversion needed - still config uses BGR888 format
+            # No color conversion needed - still config uses RGB888 format
             mock_cv2.cvtColor.assert_not_called()
             mock_cv2.imwrite.assert_called_once()
             mock_request.release.assert_called_once()
